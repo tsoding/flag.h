@@ -12,13 +12,20 @@ int main(int argc, char **argv)
     uint64_t *count = flag_uint64("count", 64, "Amount of lines to generate");
     flag_uint64_range(count, 0, 1024);
 
-    flag_parse(argc, argv);
+    if (!flag_parse(argc, argv)) {
+        fprintf(stderr, "Usage: %s [OPTIONS]\n", argv[0]);
+        fprintf(stderr, "OPTIONS:\n");
+        flag_print_options(stderr);
+        flag_print_error(stderr);
+        exit(1);
+    }
 
     if (*help) {
         assert(argc >= 1);
         fprintf(stdout, "Usage: %s [OPTIONS]\n", argv[0]);
-        flag_print_help(stdout);
-        exit(1);
+        fprintf(stderr, "OPTIONS:\n");
+        flag_print_options(stdout);
+        exit(0);
     }
 
     FILE *f = fopen(*output, "w");

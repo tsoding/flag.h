@@ -22,15 +22,16 @@ typedef enum {
     FLAG_STR,
 } Flag_Type;
 
-// TODO: it does not really make sense for a flag to have any other defaults by false
+
+// TODO: it does not really make sense for a bool flag to have any other defaults but false
 // And since false is the default by default, maybe there is no need to print it in help
 bool *flag_bool(const char *name, bool def, const char *desc);
 uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc);
 void flag_uint64_range(uint64_t *flag, uint64_t min, uint64_t max);
 char **flag_str(const char *name, char *def, const char *desc);
-// TODO: flag_parse failures should be recoverable
-void flag_parse(int argc, char **argv);
-void flag_print_help(FILE *stream);
+bool flag_parse(int argc, char **argv);
+void flag_print_error(FILE *stream);
+void flag_print_options(FILE *stream);
 
 #endif // FLAG_H_
 
@@ -44,6 +45,16 @@ typedef enum {
     DATA_MIN = 2,
     DATA_MAX = 3,
 } Flag_Data;
+
+typedef enum {
+    FLAG_NO_ERROR = 0,
+    FLAG_ERROR_UNKNOWN,
+    FLAG_ERROR_TWICE,
+    FLAG_ERROR_NO_VALUE,
+    FLAG_ERROR_INVALID_NUMBER,
+    FLAG_ERROR_INTEGER_OVERFLOW,
+    FLAG_ERROR_OUT_OF_RANGE,
+} Flag_Error;
 
 // TODO: figure out how to introduce mandatory flags (if its possible)
 // If the failures of flag_parse() are recoverable it will be possible,
@@ -66,6 +77,9 @@ typedef struct {
 
 static Flag flags[FLAGS_CAP];
 static size_t flags_count = 0;
+
+Flag_Error flag_error = FLAG_NO_ERROR;
+char *flag_error_name = NULL;
 
 // TODO: get rid of flags_tmp_str
 static char flags_tmp_str[FLAGS_TMP_STR_CAP];
@@ -125,7 +139,7 @@ static char *flag_shift_args(int *argc, char ***argv)
     return result;
 }
 
-void flag_parse(int argc, char **argv)
+bool flag_parse(int argc, char **argv)
 {
     flag_shift_args(&argc, &argv);
 
@@ -133,21 +147,24 @@ void flag_parse(int argc, char **argv)
         char *flag = flag_shift_args(&argc, &argv);
 
         if (*flag != '-') {
-            fprintf(stderr, "ERROR: -%s: unknown flag\n", flag);
-            exit(1);
+            flag_error = FLAG_ERROR_UNKNOWN;
+            flag_error_name = flag;
+            return false;
         }
 
         flag += 1;
 
+        bool found = false;
         for (size_t i = 0; i < flags_count; ++i) {
             if (strcmp(flags[i].name, flag) == 0) {
                 if (flags[i].provided) {
-                    // TODO: should we introduce some sort of an option that allows to provide repeat the same flag?
+                    // TODO: should we introduce some sort of an option that allows to repeat the same flag?
                     // How do we handle it? Override the original flag? Collect into a list?
-                    fprintf(stderr, "ERROR: -%s: provided twice\n", flag);
-                    exit(1);
+                    flag_error = FLAG_ERROR_UNKNOWN;
+                    flag_error_name = flag;
+                    return false;
                 }
-                
+
                 switch (flags[i].type) {
                 case FLAG_BOOL: {
                     *(bool*)&flags[i].data = true;
@@ -156,8 +173,9 @@ void flag_parse(int argc, char **argv)
 
                 case FLAG_STR: {
                     if (argc == 0) {
-                        fprintf(stderr, "ERROR: -%s: no argument provided\n", flag);
-                        exit(1);
+                        flag_error = FLAG_ERROR_NO_VALUE;
+                        flag_error_name = flag;
+                        return false;
                     }
                     char *arg = flag_shift_args(&argc, &argv);
                     *(char**)&flags[i].data = arg;
@@ -166,8 +184,9 @@ void flag_parse(int argc, char **argv)
 
                 case FLAG_UINT64: {
                     if (argc == 0) {
-                        fprintf(stderr, "ERROR: -%s: no argument provided\n", flag);
-                        exit(1);
+                        flag_error = FLAG_ERROR_NO_VALUE;
+                        flag_error_name = flag;
+                        return false;
                     }
                     char *arg = flag_shift_args(&argc, &argv);
 
@@ -175,21 +194,26 @@ void flag_parse(int argc, char **argv)
                     char *endptr;
                     unsigned long long int result = strtoull(arg, &endptr, 10);
                     if (arg == endptr || *endptr != '\0') {
-                        fprintf(stderr, "ERROR: -%s: not a valid number\n", flag);
-                        exit(1);
+                        flag_error = FLAG_ERROR_INVALID_NUMBER;
+                        flag_error_name = flag;
+                        return false;
                     }
                     if (result == ULLONG_MAX && errno == ERANGE) {
-                        fprintf(stderr, "ERROR: -%s: 64 bit unsigned integer overflow\n", flag);
-                        exit(1);
+                        flag_error = FLAG_ERROR_INTEGER_OVERFLOW;
+                        flag_error_name = flag;
+                        return false;
                     }
 
                     uint64_t val = result;
                     uint64_t min = *(uint64_t*)&flags[i].data[DATA_MIN];
                     uint64_t max = *(uint64_t*)&flags[i].data[DATA_MAX];
 
+                    // TODO: what if we store Flag_Error inside of Flag and simply continue parsing flags on any errors that may occur? Hmmmm
+
                     if (!(min <= val && val <= max)) {
-                        fprintf(stderr, "ERROR: -%s: outside of the [%"PRIu64"..%"PRIu64"] range\n", flag, min, max);
-                        exit(1);
+                        flag_error = FLAG_ERROR_OUT_OF_RANGE;
+                        flag_error_name = flag;
+                        return false;
                     }
 
                     *(uint64_t*)&flags[i].data[DATA_VAL] = val;
@@ -203,9 +227,18 @@ void flag_parse(int argc, char **argv)
                 }
 
                 flags[i].provided = true;
+                found = true;
             }
         }
+
+        if (!found) {
+            flag_error = FLAG_ERROR_UNKNOWN;
+            flag_error_name = flag;
+            return false;
+        }
     }
+
+    return true;
 }
 
 static char *flag_show_data(Flag_Type type, uintptr_t data)
@@ -236,7 +269,7 @@ static char *flag_show_data(Flag_Type type, uintptr_t data)
     exit(69);
 }
 
-void flag_print_help(FILE *stream)
+void flag_print_options(FILE *stream)
 {
     for (size_t i = 0; i < flags_count; ++i) {
         fprintf(stream, "    -%s\n", flags[i].name);
@@ -252,19 +285,52 @@ void flag_print_help(FILE *stream)
     }
 }
 
+void flag_print_error(FILE *stream)
+{
+    switch (flag_error) {
+    case FLAG_NO_ERROR:
+        // TODO: more descriptive error message on trying to call flag_print_error() when there is no error.
+        // Make it clear that it's the developer's mistake
+        fprintf(stream, "Operation Failed Successfully!");
+        break;
+    case FLAG_ERROR_UNKNOWN:
+        fprintf(stream, "ERROR: -%s: unknown flag\n", flag_error_name);
+        break;
+    case FLAG_ERROR_TWICE:
+        fprintf(stream, "ERROR: -%s: provided twice\n", flag_error_name);
+        break;
+    case FLAG_ERROR_NO_VALUE:
+        fprintf(stream, "ERROR: -%s: no value provided\n", flag_error_name);
+        break;
+    case FLAG_ERROR_INVALID_NUMBER:
+        fprintf(stream, "ERROR: -%s: invalid number\n", flag_error_name);
+        break;
+    case FLAG_ERROR_INTEGER_OVERFLOW:
+        fprintf(stream, "ERROR: -%s: integer overflow\n", flag_error_name);
+        break;
+    case FLAG_ERROR_OUT_OF_RANGE:
+        // TODO: print the range in case ot Out-Of-Range error
+        fprintf(stream, "ERROR: -%s: out of range\n", flag_error_name);
+        break;
+    default:
+        assert(0 && "unreachable");
+        exit(69);
+    }
+}
+
 #endif
 // Copyright 2021 Alexey Kutepov <reximkut@gmail.com>
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
 // deal in the Software without restriction, including without limitation the
 // rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
 // sell copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
