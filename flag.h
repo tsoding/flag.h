@@ -23,6 +23,8 @@ typedef enum {
 } Flag_Type;
 
 // TODO: add support for -flag=x syntax
+// TODO: stop parsing after the first non-flag argument or -- terminator
+// Add ability to get the rest unparsed arguments
 
 bool *flag_bool(const char *name, bool def, const char *desc);
 uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc);
