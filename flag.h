@@ -24,6 +24,7 @@ typedef enum {
 
 // TODO: add support for -flag=x syntax
 
+void flag_mandatory(void *val);
 bool *flag_bool(const char *name, bool def, const char *desc);
 uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc);
 void flag_uint64_range(uint64_t *flag, uint64_t min, uint64_t max);
@@ -53,16 +54,15 @@ typedef enum {
     FLAG_ERROR_INVALID_NUMBER,
     FLAG_ERROR_INTEGER_OVERFLOW,
     FLAG_ERROR_OUT_OF_RANGE,
+    FLAG_ERROR_MANDATORY
 } Flag_Error;
 
-// TODO: figure out how to introduce mandatory flags (if its possible)
-// If the failures of flag_parse() are recoverable it will be possible,
-// but it may overcomplicated the interface
 typedef struct {
     Flag_Type type;
-    const char *name;
-    const char *desc;
+    char *name;
+    char *desc;
     bool provided;
+    bool mandatory;
     uintptr_t data[4];
 } Flag;
 
@@ -90,9 +90,16 @@ Flag *flag_new(Flag_Type type, const char *name, const char *desc)
     Flag *flag = &flags[flags_count++];
     memset(flag, 0, sizeof(*flag));
     flag->type = type;
-    flag->name = name;
-    flag->desc = desc;
+    // NOTE: I won't touch them I promise Kappa
+    flag->name = (char*) name;
+    flag->desc = (char*) desc;
     return flag;
+}
+
+void flag_mandatory(void *val)
+{
+    Flag *flag = (Flag*)((char*) val - offsetof(Flag, data));
+    flag->mandatory = true;
 }
 
 bool *flag_bool(const char *name, bool def, const char *desc)
@@ -237,6 +244,15 @@ bool flag_parse(int argc, char **argv)
         }
     }
 
+    // NOTE: check for not provided mandatory flags
+    for (size_t i = 0; i < flags_count; ++i) {
+        if (flags[i].mandatory && !flags[i].provided) {
+            flag_error = FLAG_ERROR_MANDATORY;
+            flag_error_name = flags[i].name;
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -273,7 +289,13 @@ void flag_print_options(FILE *stream)
     for (size_t i = 0; i < flags_count; ++i) {
         fprintf(stream, "    -%s\n", flags[i].name);
         fprintf(stream, "        %s.\n", flags[i].desc);
-        fprintf(stream, "        Default: %s\n", flag_show_data(flags[i].type, flags[i].data[DATA_DEF]));
+
+        if (!flags[i].mandatory) {
+            fprintf(stream, "        Default: %s\n", flag_show_data(flags[i].type, flags[i].data[DATA_DEF]));
+        } else {
+            fprintf(stream, "        MANDATORY!\n");
+        }
+
         if (flags[i].type == FLAG_UINT64) {
             fprintf(stream, "        Range: [%s..%s]\n",
                     flag_show_data(flags[i].type, flags[i].data[DATA_MIN]),
@@ -310,6 +332,9 @@ void flag_print_error(FILE *stream)
     case FLAG_ERROR_OUT_OF_RANGE:
         // TODO: print the range in case ot Out-Of-Range error
         fprintf(stream, "ERROR: -%s: out of range\n", flag_error_name);
+        break;
+    case FLAG_ERROR_MANDATORY:
+        fprintf(stream, "ERROR: -%s: missing mandatory flag\n", flag_error_name);
         break;
     default:
         assert(0 && "unreachable");
