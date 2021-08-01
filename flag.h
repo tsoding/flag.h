@@ -23,7 +23,9 @@
 // void flag_bool_var(bool *var, const char *name, bool def, const char *desc);
 // void flag_bool_uint64(uint64_t *var, const char *name, bool def, const char *desc);
 // etc.
+// WARNING! *_var functions may break the flag_name() functionality
 
+char *flag_name(void *val);
 bool *flag_bool(const char *name, bool def, const char *desc);
 uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc);
 char **flag_str(const char *name, char *def, const char *desc);
@@ -84,6 +86,12 @@ Flag *flag_new(Flag_Type type, const char *name, const char *desc)
     flag->name = (char*) name;
     flag->desc = (char*) desc;
     return flag;
+}
+
+char *flag_name(void *val)
+{
+    Flag *flag = (Flag*) ((char*) val - offsetof(Flag, data));
+    return flag->name;
 }
 
 bool *flag_bool(const char *name, bool def, const char *desc)
