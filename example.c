@@ -11,7 +11,6 @@ int main(int argc, char **argv)
     flag_mandatory(output);
     char **line = flag_str("line", "Hi!", "Line to output to the file");
     uint64_t *count = flag_uint64("count", 64, "Amount of lines to generate");
-    flag_uint64_range(count, 0, 1024);
 
     if (!flag_parse(argc, argv)) {
         fprintf(stderr, "Usage: %s [OPTIONS]\n", argv[0]);

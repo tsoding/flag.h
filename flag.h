@@ -27,7 +27,6 @@ typedef enum {
 void flag_mandatory(void *val);
 bool *flag_bool(const char *name, bool def, const char *desc);
 uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc);
-void flag_uint64_range(uint64_t *flag, uint64_t min, uint64_t max);
 char **flag_str(const char *name, char *def, const char *desc);
 bool flag_parse(int argc, char **argv);
 void flag_print_error(FILE *stream);
@@ -42,8 +41,7 @@ void flag_print_options(FILE *stream);
 typedef enum {
     DATA_VAL = 0,
     DATA_DEF = 1,
-    DATA_MIN = 2,
-    DATA_MAX = 3,
+    DATA_COUNT,
 } Flag_Data;
 
 typedef enum {
@@ -53,7 +51,6 @@ typedef enum {
     FLAG_ERROR_NO_VALUE,
     FLAG_ERROR_INVALID_NUMBER,
     FLAG_ERROR_INTEGER_OVERFLOW,
-    FLAG_ERROR_OUT_OF_RANGE,
     FLAG_ERROR_MANDATORY
 } Flag_Error;
 
@@ -63,7 +60,7 @@ typedef struct {
     char *desc;
     bool provided;
     bool mandatory;
-    uintptr_t data[4];
+    uintptr_t data[DATA_COUNT];
 } Flag;
 
 #ifndef FLAGS_CAP
@@ -115,17 +112,7 @@ uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc)
     Flag *flag = flag_new(FLAG_UINT64, name, desc);
     *((uint64_t*) &flag->data[DATA_DEF]) = def;
     *((uint64_t*) &flag->data[DATA_VAL]) = def;
-    *((uint64_t*) &flag->data[DATA_MIN]) = 0;
-    *((uint64_t*) &flag->data[DATA_MAX]) = UINT64_MAX;
     return (uint64_t*) &flag->data[DATA_VAL];
-}
-
-void flag_uint64_range(uint64_t *flag, uint64_t min, uint64_t max)
-{
-    assert(min <= max);
-    static_assert(sizeof(uint64_t) == sizeof(uintptr_t), "This hack will only work if the size of uint64_t and uintptr_t is the same");
-    flag[DATA_MIN] = min;
-    flag[DATA_MAX] = max;
 }
 
 char **flag_str(const char *name, char *def, const char *desc)
@@ -199,6 +186,7 @@ bool flag_parse(int argc, char **argv)
                     static_assert(sizeof(unsigned long long int) == sizeof(uint64_t), "The original author designed this for x86_64 machine with the compiler that expects unsigned long long int and uint64_t to be the same thing, so they could use strtoull() function to parse it. Please adjust this code for your case and maybe even send the patch to upstream to make it work on a wider range of environments.");
                     char *endptr;
                     unsigned long long int result = strtoull(arg, &endptr, 10);
+                    // TODO: what if we store Flag_Error inside of Flag and simply continue parsing flags on any errors that may occur? Hmmmm
                     if (arg == endptr || *endptr != '\0') {
                         flag_error = FLAG_ERROR_INVALID_NUMBER;
                         flag_error_name = flag;
@@ -210,19 +198,7 @@ bool flag_parse(int argc, char **argv)
                         return false;
                     }
 
-                    uint64_t val = result;
-                    uint64_t min = *(uint64_t*)&flags[i].data[DATA_MIN];
-                    uint64_t max = *(uint64_t*)&flags[i].data[DATA_MAX];
-
-                    // TODO: what if we store Flag_Error inside of Flag and simply continue parsing flags on any errors that may occur? Hmmmm
-
-                    if (!(min <= val && val <= max)) {
-                        flag_error = FLAG_ERROR_OUT_OF_RANGE;
-                        flag_error_name = flag;
-                        return false;
-                    }
-
-                    *(uint64_t*)&flags[i].data[DATA_VAL] = val;
+                    *(uint64_t*)&flags[i].data[DATA_VAL] = result;
                 }
                 break;
 
@@ -296,12 +272,6 @@ void flag_print_options(FILE *stream)
             fprintf(stream, "        MANDATORY!\n");
         }
 
-        if (flags[i].type == FLAG_UINT64) {
-            fprintf(stream, "        Range: [%s..%s]\n",
-                    flag_show_data(flags[i].type, flags[i].data[DATA_MIN]),
-                    flag_show_data(flags[i].type, flags[i].data[DATA_MAX]));
-        }
-
         flags_tmp_str_size = 0;
     }
 }
@@ -328,10 +298,6 @@ void flag_print_error(FILE *stream)
         break;
     case FLAG_ERROR_INTEGER_OVERFLOW:
         fprintf(stream, "ERROR: -%s: integer overflow\n", flag_error_name);
-        break;
-    case FLAG_ERROR_OUT_OF_RANGE:
-        // TODO: print the range in case ot Out-Of-Range error
-        fprintf(stream, "ERROR: -%s: out of range\n", flag_error_name);
         break;
     case FLAG_ERROR_MANDATORY:
         fprintf(stream, "ERROR: -%s: missing mandatory flag\n", flag_error_name);
