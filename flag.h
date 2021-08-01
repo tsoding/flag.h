@@ -167,7 +167,7 @@ bool flag_parse(int argc, char **argv)
                     static_assert(sizeof(unsigned long long int) == sizeof(uint64_t), "The original author designed this for x86_64 machine with the compiler that expects unsigned long long int and uint64_t to be the same thing, so they could use strtoull() function to parse it. Please adjust this code for your case and maybe even send the patch to upstream to make it work on a wider range of environments.");
                     char *endptr;
                     unsigned long long int result = strtoull(arg, &endptr, 10);
-                    // TODO: what if we store Flag_Error inside of Flag and simply continue parsing flags on any errors that may occur? Hmmmm
+
                     if (arg == endptr || *endptr != '\0') {
                         flag_error = FLAG_ERROR_INVALID_NUMBER;
                         flag_error_name = flag;
