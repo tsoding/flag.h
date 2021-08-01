@@ -225,9 +225,8 @@ void flag_print_error(FILE *stream)
 {
     switch (flag_error) {
     case FLAG_NO_ERROR:
-        // TODO: more descriptive error message on trying to call flag_print_error() when there is no error.
-        // Make it clear that it's the developer's mistake
-        fprintf(stream, "Operation Failed Successfully!");
+        // NOTE: don't call flag_print_error() if flag_parse() didn't return false, okay? ._.
+        fprintf(stream, "Operation Failed Successfully! Please tell the developer of this software that they don't know what they are doing! :)");
         break;
     case FLAG_ERROR_UNKNOWN:
         fprintf(stream, "ERROR: -%s: unknown flag\n", flag_error_name);
