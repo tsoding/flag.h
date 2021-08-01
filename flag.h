@@ -62,15 +62,11 @@ typedef struct {
 #define FLAGS_CAP 256
 #endif
 
-#ifndef FLAGS_TMP_STR_CAP
-#define FLAGS_TMP_STR_CAP 1024
-#endif
-
 static Flag flags[FLAGS_CAP];
 static size_t flags_count = 0;
 
-Flag_Error flag_error = FLAG_NO_ERROR;
-char *flag_error_name = NULL;
+static Flag_Error flag_error = FLAG_NO_ERROR;
+static char *flag_error_name = NULL;
 
 Flag *flag_new(Flag_Type type, const char *name, const char *desc)
 {
