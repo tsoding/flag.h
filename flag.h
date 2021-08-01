@@ -22,9 +22,8 @@ typedef enum {
     FLAG_STR,
 } Flag_Type;
 
+// TODO: add support for -flag=x syntax
 
-// TODO: it does not really make sense for a bool flag to have any other defaults but false
-// And since false is the default by default, maybe there is no need to print it in help
 bool *flag_bool(const char *name, bool def, const char *desc);
 uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc);
 void flag_uint64_range(uint64_t *flag, uint64_t min, uint64_t max);
