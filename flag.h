@@ -166,7 +166,7 @@ bool flag_parse(int argc, char **argv)
                 if (flags[i].provided) {
                     // TODO: should we introduce some sort of an option that allows to repeat the same flag?
                     // How do we handle it? Override the original flag? Collect into a list?
-                    flag_error = FLAG_ERROR_UNKNOWN;
+                    flag_error = FLAG_ERROR_TWICE;
                     flag_error_name = flag;
                     return false;
                 }
