@@ -72,10 +72,6 @@ static size_t flags_count = 0;
 Flag_Error flag_error = FLAG_NO_ERROR;
 char *flag_error_name = NULL;
 
-// TODO: get rid of flags_tmp_str
-static char flags_tmp_str[FLAGS_TMP_STR_CAP];
-static size_t flags_tmp_str_size = 0;
-
 Flag *flag_new(Flag_Type type, const char *name, const char *desc)
 {
     assert(flags_count < FLAGS_CAP);
@@ -203,41 +199,25 @@ bool flag_parse(int argc, char **argv)
     return true;
 }
 
-static char *flag_show_data(Flag_Type type, uintptr_t data)
-{
-    switch (type) {
-    case FLAG_BOOL:
-        return (*(bool*) &data) ? "true" : "false";
-
-    case FLAG_UINT64: {
-        int n = snprintf(NULL, 0, "%"PRIu64, *(uint64_t*) &data);
-        assert(n >= 0);
-        assert(flags_tmp_str_size + n + 1 <= FLAGS_TMP_STR_CAP);
-        int m = snprintf(flags_tmp_str + flags_tmp_str_size,
-                         FLAGS_TMP_STR_CAP - flags_tmp_str_size,
-                         "%"PRIu64,
-                         *(uint64_t*) &data);
-        assert(n == m);
-        char *result = flags_tmp_str + flags_tmp_str_size;
-        flags_tmp_str_size += n + 1;
-        return result;
-    }
-
-    case FLAG_STR:
-        return *(char**) &data;
-    }
-
-    assert(0 && "unreachable");
-    exit(69);
-}
-
 void flag_print_options(FILE *stream)
 {
     for (size_t i = 0; i < flags_count; ++i) {
         fprintf(stream, "    -%s\n", flags[i].name);
         fprintf(stream, "        %s.\n", flags[i].desc);
-        fprintf(stream, "        Default: %s\n", flag_show_data(flags[i].type, flags[i].data[DATA_DEF]));
-        flags_tmp_str_size = 0;
+        switch (flags[i].type) {
+        case FLAG_BOOL:
+            fprintf(stream, "        Default: %s\n", *(bool*)&flags[i].data[DATA_DEF] ? "true" : "false");
+            break;
+        case FLAG_UINT64:
+            fprintf(stream, "        Default: %"PRIu64"\n", *(uint64_t*)&flags[i].data[DATA_DEF]);
+            break;
+        case FLAG_STR:
+            fprintf(stream, "        Default: %s\n", *(char**)&flags[i].data[DATA_DEF]);
+            break;
+        default:
+            assert(0 && "unreachable");
+            exit(69);
+        }
     }
 }
 
