@@ -10,3 +10,11 @@ Check [example.c](./example.c)
 $ cc -o example example.c
 $ ./example -help
 ```
+
+# Inlcuding globally
+
+```
+$ cd flag.h
+$ sudo mkdir /usr/include/tsoding/
+$ sudo mv flag.h /usr/include/tsoding
+```
