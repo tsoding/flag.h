@@ -147,7 +147,7 @@ bool flag_parse(int argc, char **argv)
             if (strcmp(flags[i].name, flag) == 0) {
                 switch (flags[i].type) {
                 case FLAG_BOOL: {
-                    *(bool*)&flags[i].data = true;
+                    *(bool*)&flags[i].data[DATA_VAL] = !*(bool*)&flags[i].data[DATA_DEF];
                 }
                 break;
 
