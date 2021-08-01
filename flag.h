@@ -46,7 +46,6 @@ typedef enum {
 typedef enum {
     FLAG_NO_ERROR = 0,
     FLAG_ERROR_UNKNOWN,
-    FLAG_ERROR_TWICE,
     FLAG_ERROR_NO_VALUE,
     FLAG_ERROR_INVALID_NUMBER,
     FLAG_ERROR_INTEGER_OVERFLOW,
@@ -56,7 +55,6 @@ typedef struct {
     Flag_Type type;
     char *name;
     char *desc;
-    bool provided;
     uintptr_t data[DATA_COUNT];
 } Flag;
 
@@ -141,14 +139,6 @@ bool flag_parse(int argc, char **argv)
         bool found = false;
         for (size_t i = 0; i < flags_count; ++i) {
             if (strcmp(flags[i].name, flag) == 0) {
-                if (flags[i].provided) {
-                    // TODO: should we introduce some sort of an option that allows to repeat the same flag?
-                    // How do we handle it? Override the original flag? Collect into a list?
-                    flag_error = FLAG_ERROR_TWICE;
-                    flag_error_name = flag;
-                    return false;
-                }
-
                 switch (flags[i].type) {
                 case FLAG_BOOL: {
                     *(bool*)&flags[i].data = true;
@@ -199,7 +189,6 @@ bool flag_parse(int argc, char **argv)
                 }
                 }
 
-                flags[i].provided = true;
                 found = true;
             }
         }
@@ -262,9 +251,6 @@ void flag_print_error(FILE *stream)
         break;
     case FLAG_ERROR_UNKNOWN:
         fprintf(stream, "ERROR: -%s: unknown flag\n", flag_error_name);
-        break;
-    case FLAG_ERROR_TWICE:
-        fprintf(stream, "ERROR: -%s: provided twice\n", flag_error_name);
         break;
     case FLAG_ERROR_NO_VALUE:
         fprintf(stream, "ERROR: -%s: no value provided\n", flag_error_name);
