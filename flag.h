@@ -16,15 +16,13 @@
 #include <string.h>
 #include <errno.h>
 
-typedef enum {
-    FLAG_BOOL,
-    FLAG_UINT64,
-    FLAG_STR,
-} Flag_Type;
-
 // TODO: add support for -flag=x syntax
 // TODO: stop parsing after the first non-flag argument or -- terminator
 // Add ability to get the rest unparsed arguments
+// TODO: *_var function variants
+// void flag_bool_var(bool *var, const char *name, bool def, const char *desc);
+// void flag_bool_uint64(uint64_t *var, const char *name, bool def, const char *desc);
+// etc.
 
 bool *flag_bool(const char *name, bool def, const char *desc);
 uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc);
@@ -38,6 +36,12 @@ void flag_print_options(FILE *stream);
 //////////////////////////////
 
 #ifdef FLAG_IMPLEMENTATION
+
+typedef enum {
+    FLAG_BOOL,
+    FLAG_UINT64,
+    FLAG_STR,
+} Flag_Type;
 
 typedef enum {
     DATA_VAL = 0,
