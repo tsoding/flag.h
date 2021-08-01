@@ -24,7 +24,6 @@ typedef enum {
 
 // TODO: add support for -flag=x syntax
 
-void flag_mandatory(void *val);
 bool *flag_bool(const char *name, bool def, const char *desc);
 uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc);
 char **flag_str(const char *name, char *def, const char *desc);
@@ -51,7 +50,6 @@ typedef enum {
     FLAG_ERROR_NO_VALUE,
     FLAG_ERROR_INVALID_NUMBER,
     FLAG_ERROR_INTEGER_OVERFLOW,
-    FLAG_ERROR_MANDATORY
 } Flag_Error;
 
 typedef struct {
@@ -59,7 +57,6 @@ typedef struct {
     char *name;
     char *desc;
     bool provided;
-    bool mandatory;
     uintptr_t data[DATA_COUNT];
 } Flag;
 
@@ -91,12 +88,6 @@ Flag *flag_new(Flag_Type type, const char *name, const char *desc)
     flag->name = (char*) name;
     flag->desc = (char*) desc;
     return flag;
-}
-
-void flag_mandatory(void *val)
-{
-    Flag *flag = (Flag*)((char*) val - offsetof(Flag, data));
-    flag->mandatory = true;
 }
 
 bool *flag_bool(const char *name, bool def, const char *desc)
@@ -220,15 +211,6 @@ bool flag_parse(int argc, char **argv)
         }
     }
 
-    // NOTE: check for not provided mandatory flags
-    for (size_t i = 0; i < flags_count; ++i) {
-        if (flags[i].mandatory && !flags[i].provided) {
-            flag_error = FLAG_ERROR_MANDATORY;
-            flag_error_name = flags[i].name;
-            return false;
-        }
-    }
-
     return true;
 }
 
@@ -265,13 +247,7 @@ void flag_print_options(FILE *stream)
     for (size_t i = 0; i < flags_count; ++i) {
         fprintf(stream, "    -%s\n", flags[i].name);
         fprintf(stream, "        %s.\n", flags[i].desc);
-
-        if (!flags[i].mandatory) {
-            fprintf(stream, "        Default: %s\n", flag_show_data(flags[i].type, flags[i].data[DATA_DEF]));
-        } else {
-            fprintf(stream, "        MANDATORY!\n");
-        }
-
+        fprintf(stream, "        Default: %s\n", flag_show_data(flags[i].type, flags[i].data[DATA_DEF]));
         flags_tmp_str_size = 0;
     }
 }
@@ -298,9 +274,6 @@ void flag_print_error(FILE *stream)
         break;
     case FLAG_ERROR_INTEGER_OVERFLOW:
         fprintf(stream, "ERROR: -%s: integer overflow\n", flag_error_name);
-        break;
-    case FLAG_ERROR_MANDATORY:
-        fprintf(stream, "ERROR: -%s: missing mandatory flag\n", flag_error_name);
         break;
     default:
         assert(0 && "unreachable");

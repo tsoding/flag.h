@@ -4,27 +4,28 @@
 #define FLAG_IMPLEMENTATION
 #include "./flag.h"
 
+void usage(FILE *stream)
+{
+    fprintf(stream, "Usage: ./example [OPTIONS]\n");
+    fprintf(stream, "OPTIONS:\n");
+    flag_print_options(stream);
+}
+
 int main(int argc, char **argv)
 {
     bool *help = flag_bool("help", false, "Print this help to stdout and exit with 0");
-    char **output = flag_str("output", NULL, "Output file path");
-    flag_mandatory(output);
+    char **output = flag_str("output", "output.txt", "Output file path");
     char **line = flag_str("line", "Hi!", "Line to output to the file");
     uint64_t *count = flag_uint64("count", 64, "Amount of lines to generate");
 
     if (!flag_parse(argc, argv)) {
-        fprintf(stderr, "Usage: %s [OPTIONS]\n", argv[0]);
-        fprintf(stderr, "OPTIONS:\n");
-        flag_print_options(stderr);
+        usage(stderr);
         flag_print_error(stderr);
         exit(1);
     }
 
     if (*help) {
-        assert(argc >= 1);
-        fprintf(stdout, "Usage: %s [OPTIONS]\n", argv[0]);
-        fprintf(stdout, "OPTIONS:\n");
-        flag_print_options(stdout);
+        usage(stdout);
         exit(0);
     }
 
