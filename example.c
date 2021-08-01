@@ -24,7 +24,7 @@ int main(int argc, char **argv)
     if (*help) {
         assert(argc >= 1);
         fprintf(stdout, "Usage: %s [OPTIONS]\n", argv[0]);
-        fprintf(stderr, "OPTIONS:\n");
+        fprintf(stdout, "OPTIONS:\n");
         flag_print_options(stdout);
         exit(0);
     }
