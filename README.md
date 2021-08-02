@@ -39,9 +39,9 @@ $
  <h3>
 and bang you've just moved the Glad folder with glad.c/glad.h into the includes folder!
 and now in your c file you can do 
-```
+<pre>
 #include<Glad/glad.h>
-```
+</pre>
    and it will work!
    </h3>
   </details>  
