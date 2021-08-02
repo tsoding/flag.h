@@ -36,8 +36,10 @@ $ sudo mv ~/Downloads/Glad/Glad
 [sudo] password for $USER:
 $
 </pre>
+ <h3>
 and bang you've just moved the Glad folder with glad.c/glad.h into the includes folder!
 and now in your c file you can do 
 #include<Glad/glad.h>
 and it will work!
+   </h3>
   </details>  
