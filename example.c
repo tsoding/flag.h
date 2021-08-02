@@ -6,7 +6,7 @@
 
 void usage(FILE *stream)
 {
-    fprintf(stream, "Usage: ./example [OPTIONS]\n");
+    fprintf(stream, "Usage: ./example [OPTIONS] [--] <OUTPUT FILES...>\n");
     fprintf(stream, "OPTIONS:\n");
     flag_print_options(stream);
 }
@@ -14,7 +14,6 @@ void usage(FILE *stream)
 int main(int argc, char **argv)
 {
     bool *help = flag_bool("help", false, "Print this help to stdout and exit with 0");
-    char **output = flag_str("output", "output.txt", "Output file path");
     char **line = flag_str("line", "Hi!", "Line to output to the file");
     uint64_t *count = flag_uint64("count", 64, "Amount of lines to generate");
 
@@ -29,16 +28,28 @@ int main(int argc, char **argv)
         exit(0);
     }
 
-    FILE *f = fopen(*output, "w");
-    assert(f);
+    int rest_argc = flag_rest_argc();
+    char **rest_argv = flag_rest_argv();
 
-    for (uint64_t i = 0; i < *count; ++i) {
-        fprintf(f, "%s\n", *line);
+    if (rest_argc <= 0) {
+        usage(stderr);
+        fprintf(stderr, "ERROR: no output files are provided\n");
+        exit(1);
     }
 
-    fclose(f);
+    for (int i = 0; i < rest_argc; ++i) {
+        const char *file_path = rest_argv[i];
+        FILE *f = fopen(file_path, "w");
+        assert(f);
 
-    printf("Generated %" PRIu64 " lines in %s\n", *count, *output);
+        for (uint64_t i = 0; i < *count; ++i) {
+            fprintf(f, "%s\n", *line);
+        }
+
+        fclose(f);
+
+        printf("Generated %" PRIu64 " lines in %s\n", *count, file_path);
+    }
 
     return 0;
 }

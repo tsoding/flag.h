@@ -17,8 +17,6 @@
 #include <errno.h>
 
 // TODO: add support for -flag=x syntax
-// TODO: stop parsing after the first non-flag argument or -- terminator
-// Add ability to get the rest unparsed arguments
 // TODO: *_var function variants
 // void flag_bool_var(bool *var, const char *name, bool def, const char *desc);
 // void flag_bool_uint64(uint64_t *var, const char *name, bool def, const char *desc);
@@ -30,6 +28,8 @@ bool *flag_bool(const char *name, bool def, const char *desc);
 uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc);
 char **flag_str(const char *name, const char *def, const char *desc);
 bool flag_parse(int argc, char **argv);
+int flag_rest_argc(void);
+char **flag_rest_argv(void);
 void flag_print_error(FILE *stream);
 void flag_print_options(FILE *stream);
 
@@ -71,16 +71,25 @@ typedef struct {
 #define FLAGS_CAP 256
 #endif
 
-static Flag flags[FLAGS_CAP];
-static size_t flags_count = 0;
+typedef struct {
+    Flag flags[FLAGS_CAP];
+    size_t flags_count;
 
-static Flag_Error flag_error = FLAG_NO_ERROR;
-static char *flag_error_name = NULL;
+    Flag_Error flag_error;
+    char *flag_error_name;
+
+    int rest_argc;
+    char **rest_argv;
+} Flag_Context;
+
+static Flag_Context flag_global_context;
 
 Flag *flag_new(Flag_Type type, const char *name, const char *desc)
 {
-    assert(flags_count < FLAGS_CAP);
-    Flag *flag = &flags[flags_count++];
+    Flag_Context *c = &flag_global_context;
+
+    assert(c->flags_count < FLAGS_CAP);
+    Flag *flag = &c->flags[c->flags_count++];
     memset(flag, 0, sizeof(*flag));
     flag->type = type;
     // NOTE: I won't touch them I promise Kappa
@@ -128,45 +137,66 @@ static char *flag_shift_args(int *argc, char ***argv)
     return result;
 }
 
+int flag_rest_argc(void)
+{
+    return flag_global_context.rest_argc;
+}
+
+char **flag_rest_argv(void)
+{
+    return flag_global_context.rest_argv;
+}
+
 bool flag_parse(int argc, char **argv)
 {
+    Flag_Context *c = &flag_global_context;
+
     flag_shift_args(&argc, &argv);
 
     while (argc > 0) {
         char *flag = flag_shift_args(&argc, &argv);
 
         if (*flag != '-') {
-            flag_error = FLAG_ERROR_UNKNOWN;
-            flag_error_name = flag;
-            return false;
+            // NOTE: pushing flag back into args
+            c->rest_argc = argc + 1;
+            c->rest_argv = argv - 1;
+            return true;
         }
 
+        if (strcmp(flag, "--") == 0) {
+            // NOTE: but if it's the terminator we don't need to push it back
+            c->rest_argc = argc;
+            c->rest_argv = argv;
+            return true;
+        }
+
+        // NOTE: remove the dash
         flag += 1;
 
         bool found = false;
-        for (size_t i = 0; i < flags_count; ++i) {
-            if (strcmp(flags[i].name, flag) == 0) {
-                switch (flags[i].type) {
+        for (size_t i = 0; i < c->flags_count; ++i) {
+            if (strcmp(c->flags[i].name, flag) == 0) {
+                switch (c->flags[i].type) {
                 case FLAG_BOOL: {
-                    flags[i].val.as_bool = true;
+                    c->flags[i].val.as_bool = true;
                 }
                 break;
 
                 case FLAG_STR: {
                     if (argc == 0) {
-                        flag_error = FLAG_ERROR_NO_VALUE;
-                        flag_error_name = flag;
+                        c->flag_error = FLAG_ERROR_NO_VALUE;
+                        c->flag_error_name = flag;
                         return false;
                     }
                     char *arg = flag_shift_args(&argc, &argv);
-                    flags[i].val.as_str = arg;
+                    c->flags[i].val.as_str = arg;
                 }
                 break;
 
                 case FLAG_UINT64: {
                     if (argc == 0) {
-                        flag_error = FLAG_ERROR_NO_VALUE;
-                        flag_error_name = flag;
+                        c->flag_error = FLAG_ERROR_NO_VALUE;
+                        c->flag_error_name = flag;
                         return false;
                     }
                     char *arg = flag_shift_args(&argc, &argv);
@@ -178,17 +208,17 @@ bool flag_parse(int argc, char **argv)
                     unsigned long long int result = strtoull(arg, &endptr, 10);
 
                     if (arg == endptr || *endptr != '\0') {
-                        flag_error = FLAG_ERROR_INVALID_NUMBER;
-                        flag_error_name = flag;
+                        c->flag_error = FLAG_ERROR_INVALID_NUMBER;
+                        c->flag_error_name = flag;
                         return false;
                     }
                     if (result == ULLONG_MAX && errno == ERANGE) {
-                        flag_error = FLAG_ERROR_INTEGER_OVERFLOW;
-                        flag_error_name = flag;
+                        c->flag_error = FLAG_ERROR_INTEGER_OVERFLOW;
+                        c->flag_error_name = flag;
                         return false;
                     }
 
-                    flags[i].val.as_uint64 = result;
+                    c->flags[i].val.as_uint64 = result;
                 }
                 break;
 
@@ -203,29 +233,38 @@ bool flag_parse(int argc, char **argv)
         }
 
         if (!found) {
-            flag_error = FLAG_ERROR_UNKNOWN;
-            flag_error_name = flag;
+            c->flag_error = FLAG_ERROR_UNKNOWN;
+            c->flag_error_name = flag;
             return false;
         }
     }
 
+    c->rest_argc = argc;
+    c->rest_argv = argv;
     return true;
 }
 
 void flag_print_options(FILE *stream)
 {
-    for (size_t i = 0; i < flags_count; ++i) {
-        fprintf(stream, "    -%s\n", flags[i].name);
-        fprintf(stream, "        %s.\n", flags[i].desc);
-        switch (flags[i].type) {
+    Flag_Context *c = &flag_global_context;
+    for (size_t i = 0; i < c->flags_count; ++i) {
+        Flag *flag = &c->flags[i];
+
+        fprintf(stream, "    -%s\n", flag->name);
+        fprintf(stream, "        %s\n", flag->desc);
+        switch (c->flags[i].type) {
         case FLAG_BOOL:
-            fprintf(stream, "        Default: %s\n", flags[i].val.as_bool ? "true" : "false");
+            if (flag->def.as_bool) {
+                fprintf(stream, "        Default: %s\n", flag->def.as_bool ? "true" : "false");
+            }
             break;
         case FLAG_UINT64:
-            fprintf(stream, "        Default: %" PRIu64 "\n", flags[i].val.as_uint64);
+            fprintf(stream, "        Default: %" PRIu64 "\n", flag->def.as_uint64);
             break;
         case FLAG_STR:
-            fprintf(stream, "        Default: %s\n", flags[i].val.as_str);
+            if (flag->def.as_str) {
+                fprintf(stream, "        Default: %s\n", flag->def.as_str);
+            }
             break;
         default:
             assert(0 && "unreachable");
@@ -236,22 +275,23 @@ void flag_print_options(FILE *stream)
 
 void flag_print_error(FILE *stream)
 {
-    switch (flag_error) {
+    Flag_Context *c = &flag_global_context;
+    switch (c->flag_error) {
     case FLAG_NO_ERROR:
         // NOTE: don't call flag_print_error() if flag_parse() didn't return false, okay? ._.
         fprintf(stream, "Operation Failed Successfully! Please tell the developer of this software that they don't know what they are doing! :)");
         break;
     case FLAG_ERROR_UNKNOWN:
-        fprintf(stream, "ERROR: -%s: unknown flag\n", flag_error_name);
+        fprintf(stream, "ERROR: -%s: unknown flag\n", c->flag_error_name);
         break;
     case FLAG_ERROR_NO_VALUE:
-        fprintf(stream, "ERROR: -%s: no value provided\n", flag_error_name);
+        fprintf(stream, "ERROR: -%s: no value provided\n", c->flag_error_name);
         break;
     case FLAG_ERROR_INVALID_NUMBER:
-        fprintf(stream, "ERROR: -%s: invalid number\n", flag_error_name);
+        fprintf(stream, "ERROR: -%s: invalid number\n", c->flag_error_name);
         break;
     case FLAG_ERROR_INTEGER_OVERFLOW:
-        fprintf(stream, "ERROR: -%s: integer overflow\n", flag_error_name);
+        fprintf(stream, "ERROR: -%s: integer overflow\n", c->flag_error_name);
         break;
     default:
         assert(0 && "unreachable");
