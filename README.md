@@ -40,8 +40,9 @@ $
 and bang you've just moved the Glad folder with glad.c/glad.h into the includes folder!
 and now in your c file you can do 
 <pre>
-#include<Glad/glad.h>
+#include<   Glad/    glad.h  > 
 </pre>
+   Note: github thins Glad is a html thing you would just type glad/glad.h or smth
    and it will work!
    </h3>
   </details>  
