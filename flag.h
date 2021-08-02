@@ -251,7 +251,7 @@ void flag_print_options(FILE *stream)
         Flag *flag = &c->flags[i];
 
         fprintf(stream, "    -%s\n", flag->name);
-        fprintf(stream, "        %s.\n", flag->desc);
+        fprintf(stream, "        %s\n", flag->desc);
         switch (c->flags[i].type) {
         case FLAG_BOOL:
             fprintf(stream, "        Default: %s\n", flag->def.as_bool ? "true" : "false");
