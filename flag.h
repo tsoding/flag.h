@@ -17,8 +17,6 @@
 #include <errno.h>
 
 // TODO: add support for -flag=x syntax
-// TODO: stop parsing after the first non-flag argument or -- terminator
-// Add ability to get the rest unparsed arguments
 // TODO: *_var function variants
 // void flag_bool_var(bool *var, const char *name, bool def, const char *desc);
 // void flag_bool_uint64(uint64_t *var, const char *name, bool def, const char *desc);
@@ -30,6 +28,8 @@ bool *flag_bool(const char *name, bool def, const char *desc);
 uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc);
 char **flag_str(const char *name, const char *def, const char *desc);
 bool flag_parse(int argc, char **argv);
+int flag_rest_argc(void);
+char **flag_rest_argv(void);
 void flag_print_error(FILE *stream);
 void flag_print_options(FILE *stream);
 
@@ -77,6 +77,9 @@ typedef struct {
 
     Flag_Error flag_error;
     char *flag_error_name;
+
+    int rest_argc;
+    char **rest_argv;
 } Flag_Context;
 
 static Flag_Context flag_global_context;
@@ -134,6 +137,16 @@ static char *flag_shift_args(int *argc, char ***argv)
     return result;
 }
 
+int flag_rest_argc(void)
+{
+    return flag_global_context.rest_argc;
+}
+
+char **flag_rest_argv(void)
+{
+    return flag_global_context.rest_argv;
+}
+
 bool flag_parse(int argc, char **argv)
 {
     Flag_Context *c = &flag_global_context;
@@ -144,11 +157,20 @@ bool flag_parse(int argc, char **argv)
         char *flag = flag_shift_args(&argc, &argv);
 
         if (*flag != '-') {
-            c->flag_error = FLAG_ERROR_UNKNOWN;
-            c->flag_error_name = flag;
-            return false;
+            // NOTE: pushing flag back into args
+            c->rest_argc = argc + 1;
+            c->rest_argv = argv - 1;
+            return true;
         }
 
+        if (strcmp(flag, "--") == 0) {
+            // NOTE: but if it's the terminator we don't need to push it back
+            c->rest_argc = argc;
+            c->rest_argv = argv;
+            return true;
+        }
+
+        // NOTE: remove the dash
         flag += 1;
 
         bool found = false;
@@ -217,6 +239,8 @@ bool flag_parse(int argc, char **argv)
         }
     }
 
+    c->rest_argc = argc;
+    c->rest_argv = argv;
     return true;
 }
 
