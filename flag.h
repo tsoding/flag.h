@@ -262,7 +262,9 @@ void flag_print_options(FILE *stream)
             fprintf(stream, "        Default: %" PRIu64 "\n", flag->def.as_uint64);
             break;
         case FLAG_STR:
-            fprintf(stream, "        Default: %s\n", flag->def.as_str);
+            if (flag->def.as_str) {
+                fprintf(stream, "        Default: %s\n", flag->def.as_str);
+            }
             break;
         default:
             assert(0 && "unreachable");
