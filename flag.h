@@ -230,13 +230,13 @@ void flag_print_options(FILE *stream)
         fprintf(stream, "        %s.\n", flag->desc);
         switch (c->flags[i].type) {
         case FLAG_BOOL:
-            fprintf(stream, "        Default: %s\n", flag->val.as_bool ? "true" : "false");
+            fprintf(stream, "        Default: %s\n", flag->def.as_bool ? "true" : "false");
             break;
         case FLAG_UINT64:
-            fprintf(stream, "        Default: %" PRIu64 "\n", flag->val.as_uint64);
+            fprintf(stream, "        Default: %" PRIu64 "\n", flag->def.as_uint64);
             break;
         case FLAG_STR:
-            fprintf(stream, "        Default: %s\n", flag->val.as_str);
+            fprintf(stream, "        Default: %s\n", flag->def.as_str);
             break;
         default:
             assert(0 && "unreachable");
