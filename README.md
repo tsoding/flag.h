@@ -23,7 +23,7 @@ $ sudo mv flag.h /usr/include/tsoding
 <details>
   <summary>Include any file</summary>
   <h1> Include any file </h1>
-  <h3> usually the include file is located at </h3>
+  <h3> usually the include folder is located at </h3>
 <pre>
 /usr/include
 </pre>
