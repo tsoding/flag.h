@@ -28,7 +28,7 @@
 char *flag_name(void *val);
 bool *flag_bool(const char *name, bool def, const char *desc);
 uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc);
-char **flag_str(const char *name, char *def, const char *desc);
+char **flag_str(const char *name, const char *def, const char *desc);
 bool flag_parse(int argc, char **argv);
 void flag_print_error(FILE *stream);
 void flag_print_options(FILE *stream);
@@ -110,11 +110,11 @@ uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc)
     return (uint64_t*) &flag->data[DATA_VAL];
 }
 
-char **flag_str(const char *name, char *def, const char *desc)
+char **flag_str(const char *name, const char *def, const char *desc)
 {
     Flag *flag = flag_new(FLAG_STR, name, desc);
-    *((char **)&flag->data[DATA_DEF]) = def;
-    *((char **)&flag->data[DATA_VAL]) = def;
+    *((char **)&flag->data[DATA_DEF]) = (char *) def;
+    *((char **)&flag->data[DATA_VAL]) = (char *) def;
     return (char **)&flag->data[DATA_VAL];
 }
 
@@ -219,7 +219,7 @@ void flag_print_options(FILE *stream)
             fprintf(stream, "        Default: %s\n", *(bool*)&flags[i].data[DATA_DEF] ? "true" : "false");
             break;
         case FLAG_UINT64:
-            fprintf(stream, "        Default: %"PRIu64"\n", *(uint64_t*)&flags[i].data[DATA_DEF]);
+            fprintf(stream, "        Default: %" PRIu64 "\n", *(uint64_t*)&flags[i].data[DATA_DEF]);
             break;
         case FLAG_STR:
             fprintf(stream, "        Default: %s\n", *(char**)&flags[i].data[DATA_DEF]);

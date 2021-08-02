@@ -38,7 +38,7 @@ int main(int argc, char **argv)
 
     fclose(f);
 
-    printf("Generated %"PRIu64" lines in %s\n", *count, *output);
+    printf("Generated %" PRIu64 " lines in %s\n", *count, *output);
 
     return 0;
 }

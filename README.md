@@ -9,6 +9,6 @@ Inspired by Go's flag module: https://pkg.go.dev/flag
 Check [example.c](./example.c)
 
 ```console
-$ cc -o example example.c
-$ ./example -help
+$ make
+$ ./example-c -help
 ```
