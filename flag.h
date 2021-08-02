@@ -254,7 +254,9 @@ void flag_print_options(FILE *stream)
         fprintf(stream, "        %s\n", flag->desc);
         switch (c->flags[i].type) {
         case FLAG_BOOL:
-            fprintf(stream, "        Default: %s\n", flag->def.as_bool ? "true" : "false");
+            if (flag->def.as_bool) {
+                fprintf(stream, "        Default: %s\n", flag->def.as_bool ? "true" : "false");
+            }
             break;
         case FLAG_UINT64:
             fprintf(stream, "        Default: %" PRIu64 "\n", flag->def.as_uint64);
