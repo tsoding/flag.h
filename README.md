@@ -42,7 +42,7 @@ and now in your c file you can do
 <pre>
 #include<   Glad/    glad.h  > 
 </pre>
-   Note: github thins Glad is a html thing you would just type glad/glad.h or smth
+   Note: github thinks Glad is a html thing you would just type glad/glad.h or smth
    and it will work!
    </h3>
   </details>  
