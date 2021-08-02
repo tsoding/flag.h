@@ -16,19 +16,19 @@
 #include <string.h>
 #include <errno.h>
 
-typedef enum {
-    FLAG_BOOL,
-    FLAG_UINT64,
-    FLAG_STR,
-} Flag_Type;
-
 // TODO: add support for -flag=x syntax
+// TODO: stop parsing after the first non-flag argument or -- terminator
+// Add ability to get the rest unparsed arguments
+// TODO: *_var function variants
+// void flag_bool_var(bool *var, const char *name, bool def, const char *desc);
+// void flag_bool_uint64(uint64_t *var, const char *name, bool def, const char *desc);
+// etc.
+// WARNING! *_var functions may break the flag_name() functionality
 
-void flag_mandatory(void *val);
+char *flag_name(void *val);
 bool *flag_bool(const char *name, bool def, const char *desc);
 uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc);
-void flag_uint64_range(uint64_t *flag, uint64_t min, uint64_t max);
-char **flag_str(const char *name, char *def, const char *desc);
+char **flag_str(const char *name, const char *def, const char *desc);
 bool flag_parse(int argc, char **argv);
 void flag_print_error(FILE *stream);
 void flag_print_options(FILE *stream);
@@ -40,49 +40,42 @@ void flag_print_options(FILE *stream);
 #ifdef FLAG_IMPLEMENTATION
 
 typedef enum {
-    DATA_VAL = 0,
-    DATA_DEF = 1,
-    DATA_MIN = 2,
-    DATA_MAX = 3,
-} Flag_Data;
+    FLAG_BOOL,
+    FLAG_UINT64,
+    FLAG_STR,
+} Flag_Type;
+
+typedef union {
+    char *as_str;
+    uint64_t as_uint64;
+    bool as_bool;
+} Flag_Value;
 
 typedef enum {
     FLAG_NO_ERROR = 0,
     FLAG_ERROR_UNKNOWN,
-    FLAG_ERROR_TWICE,
     FLAG_ERROR_NO_VALUE,
     FLAG_ERROR_INVALID_NUMBER,
     FLAG_ERROR_INTEGER_OVERFLOW,
-    FLAG_ERROR_OUT_OF_RANGE,
-    FLAG_ERROR_MANDATORY
 } Flag_Error;
 
 typedef struct {
     Flag_Type type;
     char *name;
     char *desc;
-    bool provided;
-    bool mandatory;
-    uintptr_t data[4];
+    Flag_Value val;
+    Flag_Value def;
 } Flag;
 
 #ifndef FLAGS_CAP
 #define FLAGS_CAP 256
 #endif
 
-#ifndef FLAGS_TMP_STR_CAP
-#define FLAGS_TMP_STR_CAP 1024
-#endif
-
 static Flag flags[FLAGS_CAP];
 static size_t flags_count = 0;
 
-Flag_Error flag_error = FLAG_NO_ERROR;
-char *flag_error_name = NULL;
-
-// TODO: get rid of flags_tmp_str
-static char flags_tmp_str[FLAGS_TMP_STR_CAP];
-static size_t flags_tmp_str_size = 0;
+static Flag_Error flag_error = FLAG_NO_ERROR;
+static char *flag_error_name = NULL;
 
 Flag *flag_new(Flag_Type type, const char *name, const char *desc)
 {
@@ -96,44 +89,34 @@ Flag *flag_new(Flag_Type type, const char *name, const char *desc)
     return flag;
 }
 
-void flag_mandatory(void *val)
+char *flag_name(void *val)
 {
-    Flag *flag = (Flag*)((char*) val - offsetof(Flag, data));
-    flag->mandatory = true;
+    Flag *flag = (Flag*) ((char*) val - offsetof(Flag, val));
+    return flag->name;
 }
 
 bool *flag_bool(const char *name, bool def, const char *desc)
 {
     Flag *flag = flag_new(FLAG_BOOL, name, desc);
-    *((bool*) &flag->data[DATA_DEF]) = def;
-    *((bool*) &flag->data[DATA_VAL]) = def;
-    return (bool*) &flag->data[DATA_VAL];
+    flag->def.as_bool = def;
+    flag->val.as_bool = def;
+    return &flag->val.as_bool;
 }
 
 uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc)
 {
     Flag *flag = flag_new(FLAG_UINT64, name, desc);
-    *((uint64_t*) &flag->data[DATA_DEF]) = def;
-    *((uint64_t*) &flag->data[DATA_VAL]) = def;
-    *((uint64_t*) &flag->data[DATA_MIN]) = 0;
-    *((uint64_t*) &flag->data[DATA_MAX]) = UINT64_MAX;
-    return (uint64_t*) &flag->data[DATA_VAL];
+    flag->val.as_uint64 = def;
+    flag->def.as_uint64 = def;
+    return &flag->val.as_uint64;
 }
 
-void flag_uint64_range(uint64_t *flag, uint64_t min, uint64_t max)
-{
-    assert(min <= max);
-    static_assert(sizeof(uint64_t) == sizeof(uintptr_t), "This hack will only work if the size of uint64_t and uintptr_t is the same");
-    flag[DATA_MIN] = min;
-    flag[DATA_MAX] = max;
-}
-
-char **flag_str(const char *name, char *def, const char *desc)
+char **flag_str(const char *name, const char *def, const char *desc)
 {
     Flag *flag = flag_new(FLAG_STR, name, desc);
-    *((char **)&flag->data[DATA_DEF]) = def;
-    *((char **)&flag->data[DATA_VAL]) = def;
-    return (char **)&flag->data[DATA_VAL];
+    flag->val.as_str = (char*) def;
+    flag->def.as_str = (char*) def;
+    return &flag->val.as_str;
 }
 
 static char *flag_shift_args(int *argc, char ***argv)
@@ -163,17 +146,9 @@ bool flag_parse(int argc, char **argv)
         bool found = false;
         for (size_t i = 0; i < flags_count; ++i) {
             if (strcmp(flags[i].name, flag) == 0) {
-                if (flags[i].provided) {
-                    // TODO: should we introduce some sort of an option that allows to repeat the same flag?
-                    // How do we handle it? Override the original flag? Collect into a list?
-                    flag_error = FLAG_ERROR_TWICE;
-                    flag_error_name = flag;
-                    return false;
-                }
-
                 switch (flags[i].type) {
                 case FLAG_BOOL: {
-                    *(bool*)&flags[i].data = true;
+                    flags[i].val.as_bool = true;
                 }
                 break;
 
@@ -184,7 +159,7 @@ bool flag_parse(int argc, char **argv)
                         return false;
                     }
                     char *arg = flag_shift_args(&argc, &argv);
-                    *(char**)&flags[i].data = arg;
+                    flags[i].val.as_str = arg;
                 }
                 break;
 
@@ -198,7 +173,10 @@ bool flag_parse(int argc, char **argv)
 
                     static_assert(sizeof(unsigned long long int) == sizeof(uint64_t), "The original author designed this for x86_64 machine with the compiler that expects unsigned long long int and uint64_t to be the same thing, so they could use strtoull() function to parse it. Please adjust this code for your case and maybe even send the patch to upstream to make it work on a wider range of environments.");
                     char *endptr;
+                    // TODO: replace strtoull with a custom solution
+                    // That way we can get rid of the dependency on errno and static_assert
                     unsigned long long int result = strtoull(arg, &endptr, 10);
+
                     if (arg == endptr || *endptr != '\0') {
                         flag_error = FLAG_ERROR_INVALID_NUMBER;
                         flag_error_name = flag;
@@ -210,19 +188,7 @@ bool flag_parse(int argc, char **argv)
                         return false;
                     }
 
-                    uint64_t val = result;
-                    uint64_t min = *(uint64_t*)&flags[i].data[DATA_MIN];
-                    uint64_t max = *(uint64_t*)&flags[i].data[DATA_MAX];
-
-                    // TODO: what if we store Flag_Error inside of Flag and simply continue parsing flags on any errors that may occur? Hmmmm
-
-                    if (!(min <= val && val <= max)) {
-                        flag_error = FLAG_ERROR_OUT_OF_RANGE;
-                        flag_error_name = flag;
-                        return false;
-                    }
-
-                    *(uint64_t*)&flags[i].data[DATA_VAL] = val;
+                    flags[i].val.as_uint64 = result;
                 }
                 break;
 
@@ -232,7 +198,6 @@ bool flag_parse(int argc, char **argv)
                 }
                 }
 
-                flags[i].provided = true;
                 found = true;
             }
         }
@@ -244,44 +209,7 @@ bool flag_parse(int argc, char **argv)
         }
     }
 
-    // NOTE: check for not provided mandatory flags
-    for (size_t i = 0; i < flags_count; ++i) {
-        if (flags[i].mandatory && !flags[i].provided) {
-            flag_error = FLAG_ERROR_MANDATORY;
-            flag_error_name = flags[i].name;
-            return false;
-        }
-    }
-
     return true;
-}
-
-static char *flag_show_data(Flag_Type type, uintptr_t data)
-{
-    switch (type) {
-    case FLAG_BOOL:
-        return (*(bool*) &data) ? "true" : "false";
-
-    case FLAG_UINT64: {
-        int n = snprintf(NULL, 0, "%"PRIu64, *(uint64_t*) &data);
-        assert(n >= 0);
-        assert(flags_tmp_str_size + n + 1 <= FLAGS_TMP_STR_CAP);
-        int m = snprintf(flags_tmp_str + flags_tmp_str_size,
-                         FLAGS_TMP_STR_CAP - flags_tmp_str_size,
-                         "%"PRIu64,
-                         *(uint64_t*) &data);
-        assert(n == m);
-        char *result = flags_tmp_str + flags_tmp_str_size;
-        flags_tmp_str_size += n + 1;
-        return result;
-    }
-
-    case FLAG_STR:
-        return *(char**) &data;
-    }
-
-    assert(0 && "unreachable");
-    exit(69);
 }
 
 void flag_print_options(FILE *stream)
@@ -289,20 +217,20 @@ void flag_print_options(FILE *stream)
     for (size_t i = 0; i < flags_count; ++i) {
         fprintf(stream, "    -%s\n", flags[i].name);
         fprintf(stream, "        %s.\n", flags[i].desc);
-
-        if (!flags[i].mandatory) {
-            fprintf(stream, "        Default: %s\n", flag_show_data(flags[i].type, flags[i].data[DATA_DEF]));
-        } else {
-            fprintf(stream, "        MANDATORY!\n");
+        switch (flags[i].type) {
+        case FLAG_BOOL:
+            fprintf(stream, "        Default: %s\n", flags[i].val.as_bool ? "true" : "false");
+            break;
+        case FLAG_UINT64:
+            fprintf(stream, "        Default: %" PRIu64 "\n", flags[i].val.as_uint64);
+            break;
+        case FLAG_STR:
+            fprintf(stream, "        Default: %s\n", flags[i].val.as_str);
+            break;
+        default:
+            assert(0 && "unreachable");
+            exit(69);
         }
-
-        if (flags[i].type == FLAG_UINT64) {
-            fprintf(stream, "        Range: [%s..%s]\n",
-                    flag_show_data(flags[i].type, flags[i].data[DATA_MIN]),
-                    flag_show_data(flags[i].type, flags[i].data[DATA_MAX]));
-        }
-
-        flags_tmp_str_size = 0;
     }
 }
 
@@ -310,15 +238,11 @@ void flag_print_error(FILE *stream)
 {
     switch (flag_error) {
     case FLAG_NO_ERROR:
-        // TODO: more descriptive error message on trying to call flag_print_error() when there is no error.
-        // Make it clear that it's the developer's mistake
-        fprintf(stream, "Operation Failed Successfully!");
+        // NOTE: don't call flag_print_error() if flag_parse() didn't return false, okay? ._.
+        fprintf(stream, "Operation Failed Successfully! Please tell the developer of this software that they don't know what they are doing! :)");
         break;
     case FLAG_ERROR_UNKNOWN:
         fprintf(stream, "ERROR: -%s: unknown flag\n", flag_error_name);
-        break;
-    case FLAG_ERROR_TWICE:
-        fprintf(stream, "ERROR: -%s: provided twice\n", flag_error_name);
         break;
     case FLAG_ERROR_NO_VALUE:
         fprintf(stream, "ERROR: -%s: no value provided\n", flag_error_name);
@@ -328,13 +252,6 @@ void flag_print_error(FILE *stream)
         break;
     case FLAG_ERROR_INTEGER_OVERFLOW:
         fprintf(stream, "ERROR: -%s: integer overflow\n", flag_error_name);
-        break;
-    case FLAG_ERROR_OUT_OF_RANGE:
-        // TODO: print the range in case ot Out-Of-Range error
-        fprintf(stream, "ERROR: -%s: out of range\n", flag_error_name);
-        break;
-    case FLAG_ERROR_MANDATORY:
-        fprintf(stream, "ERROR: -%s: missing mandatory flag\n", flag_error_name);
         break;
     default:
         assert(0 && "unreachable");
