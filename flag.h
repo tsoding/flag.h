@@ -173,6 +173,8 @@ bool flag_parse(int argc, char **argv)
 
                     static_assert(sizeof(unsigned long long int) == sizeof(uint64_t), "The original author designed this for x86_64 machine with the compiler that expects unsigned long long int and uint64_t to be the same thing, so they could use strtoull() function to parse it. Please adjust this code for your case and maybe even send the patch to upstream to make it work on a wider range of environments.");
                     char *endptr;
+                    // TODO: replace strtoull with a custom solution
+                    // That way we can get rid of the dependency on errno and static_assert
                     unsigned long long int result = strtoull(arg, &endptr, 10);
 
                     if (arg == endptr || *endptr != '\0') {
