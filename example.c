@@ -6,7 +6,7 @@
 
 void usage(FILE *stream)
 {
-    fprintf(stream, "Usage: ./example [OPTIONS] <OUTPUT FILES...>\n");
+    fprintf(stream, "Usage: ./example [OPTIONS] [--] <OUTPUT FILES...>\n");
     fprintf(stream, "OPTIONS:\n");
     flag_print_options(stream);
 }
