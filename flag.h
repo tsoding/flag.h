@@ -45,11 +45,11 @@ typedef enum {
     FLAG_STR,
 } Flag_Type;
 
-typedef enum {
-    DATA_VAL = 0,
-    DATA_DEF = 1,
-    DATA_COUNT,
-} Flag_Data;
+typedef union {
+    char *as_str;
+    uint64_t as_uint64;
+    bool as_bool;
+} Flag_Value;
 
 typedef enum {
     FLAG_NO_ERROR = 0,
@@ -63,7 +63,8 @@ typedef struct {
     Flag_Type type;
     char *name;
     char *desc;
-    uintptr_t data[DATA_COUNT];
+    Flag_Value val;
+    Flag_Value def;
 } Flag;
 
 #ifndef FLAGS_CAP
@@ -90,32 +91,32 @@ Flag *flag_new(Flag_Type type, const char *name, const char *desc)
 
 char *flag_name(void *val)
 {
-    Flag *flag = (Flag*) ((char*) val - offsetof(Flag, data));
+    Flag *flag = (Flag*) ((char*) val - offsetof(Flag, val));
     return flag->name;
 }
 
 bool *flag_bool(const char *name, bool def, const char *desc)
 {
     Flag *flag = flag_new(FLAG_BOOL, name, desc);
-    *((bool*) &flag->data[DATA_DEF]) = def;
-    *((bool*) &flag->data[DATA_VAL]) = def;
-    return (bool*) &flag->data[DATA_VAL];
+    flag->def.as_bool = def;
+    flag->val.as_bool = def;
+    return &flag->val.as_bool;
 }
 
 uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc)
 {
     Flag *flag = flag_new(FLAG_UINT64, name, desc);
-    *((uint64_t*) &flag->data[DATA_DEF]) = def;
-    *((uint64_t*) &flag->data[DATA_VAL]) = def;
-    return (uint64_t*) &flag->data[DATA_VAL];
+    flag->val.as_uint64 = def;
+    flag->def.as_uint64 = def;
+    return &flag->val.as_uint64;
 }
 
 char **flag_str(const char *name, const char *def, const char *desc)
 {
     Flag *flag = flag_new(FLAG_STR, name, desc);
-    *((char **)&flag->data[DATA_DEF]) = (char *) def;
-    *((char **)&flag->data[DATA_VAL]) = (char *) def;
-    return (char **)&flag->data[DATA_VAL];
+    flag->val.as_str = (char*) def;
+    flag->def.as_str = (char*) def;
+    return &flag->val.as_str;
 }
 
 static char *flag_shift_args(int *argc, char ***argv)
@@ -147,7 +148,7 @@ bool flag_parse(int argc, char **argv)
             if (strcmp(flags[i].name, flag) == 0) {
                 switch (flags[i].type) {
                 case FLAG_BOOL: {
-                    *(bool*)&flags[i].data = true;
+                    flags[i].val.as_bool = true;
                 }
                 break;
 
@@ -158,7 +159,7 @@ bool flag_parse(int argc, char **argv)
                         return false;
                     }
                     char *arg = flag_shift_args(&argc, &argv);
-                    *(char**)&flags[i].data = arg;
+                    flags[i].val.as_str = arg;
                 }
                 break;
 
@@ -185,7 +186,7 @@ bool flag_parse(int argc, char **argv)
                         return false;
                     }
 
-                    *(uint64_t*)&flags[i].data[DATA_VAL] = result;
+                    flags[i].val.as_uint64 = result;
                 }
                 break;
 
@@ -216,13 +217,13 @@ void flag_print_options(FILE *stream)
         fprintf(stream, "        %s.\n", flags[i].desc);
         switch (flags[i].type) {
         case FLAG_BOOL:
-            fprintf(stream, "        Default: %s\n", *(bool*)&flags[i].data[DATA_DEF] ? "true" : "false");
+            fprintf(stream, "        Default: %s\n", flags[i].val.as_bool ? "true" : "false");
             break;
         case FLAG_UINT64:
-            fprintf(stream, "        Default: %" PRIu64 "\n", *(uint64_t*)&flags[i].data[DATA_DEF]);
+            fprintf(stream, "        Default: %" PRIu64 "\n", flags[i].val.as_uint64);
             break;
         case FLAG_STR:
-            fprintf(stream, "        Default: %s\n", *(char**)&flags[i].data[DATA_DEF]);
+            fprintf(stream, "        Default: %s\n", flags[i].val.as_str);
             break;
         default:
             assert(0 && "unreachable");
