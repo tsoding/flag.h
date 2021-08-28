@@ -15,7 +15,7 @@ int main(int argc, char **argv)
 {
     bool *help = flag_bool("help", false, "Print this help to stdout and exit with 0");
     char **line = flag_str("line", "Hi!", "Line to output to the file");
-    uint64_t *count = flag_uint64("count", 64, "Amount of lines to generate");
+    size_t *count = flag_size("count", 64, "Amount of lines to generate");
 
     if (!flag_parse(argc, argv)) {
         usage(stderr);
@@ -42,7 +42,7 @@ int main(int argc, char **argv)
         FILE *f = fopen(file_path, "w");
         assert(f);
 
-        for (uint64_t i = 0; i < *count; ++i) {
+        for (size_t i = 0; i < *count; ++i) {
             fprintf(f, "%s\n", *line);
         }
 
