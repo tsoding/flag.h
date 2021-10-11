@@ -21,18 +21,30 @@
 // void flag_bool_var(bool *var, const char *name, bool def, const char *desc);
 // void flag_bool_uint64(uint64_t *var, const char *name, bool def, const char *desc);
 // etc.
-// WARNING! *_var functions may break the flag_name() functionality
+// WARNING! *_var functions may break the flag_name() functionalitys
+
+bool *flag_bool (const char *name, bool def, const char *desc);
+uint8_t *flag_uint8 (const char *name, uint8_t def, const char *desc);
+int8_t *flag_int8 (const char *name, int8_t def, const char *desc);
+uint16_t *flag_uint16 (const char *name, uint16_t def, const char *desc);
+int16_t *flag_int16 (const char *name, int16_t def, const char *desc);
+uint32_t *flag_uint32 (const char *name, uint32_t def, const char *desc);
+int32_t *flag_int32 (const char *name, int32_t def, const char *desc);
+uint64_t *flag_uint64 (const char *name, uint64_t def, const char *desc);
+int64_t *flag_int64 (const char *name, int64_t def, const char *desc);
+size_t *flag_size (const char *name, size_t def, const char *desc);
+float *flag_float (const char *name, float def, const char *desc);
+double *flag_double (const char *name, double def, const char *desc);
+char **flag_str (const char *name, char* def, const char *desc);
 
 char *flag_name(void *val);
-bool *flag_bool(const char *name, bool def, const char *desc);
-uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc);
-size_t *flag_size(const char *name, uint64_t def, const char *desc);
-char **flag_str(const char *name, const char *def, const char *desc);
-bool flag_parse(int argc, char **argv);
+
 int flag_rest_argc(void);
 char **flag_rest_argv(void);
+
 void flag_print_error(FILE *stream);
 void flag_print_options(FILE *stream);
+
 
 #endif // FLAG_H_
 
@@ -40,23 +52,24 @@ void flag_print_options(FILE *stream);
 
 #ifdef FLAG_IMPLEMENTATION
 
-typedef enum {
+typedef enum Flag_Type_Enum {
     FLAG_BOOL = 0,
+    FLAG_UINT8,
+    FLAG_INT8,
+    FLAG_UINT16,
+    FLAG_INT16,
+    FLAG_UINT32,
+    FLAG_INT32,
     FLAG_UINT64,
+    FLAG_INT64,
     FLAG_SIZE,
+    FLAG_FLOAT,
+    FLAG_DOUBLE,
     FLAG_STR,
     COUNT_FLAG_TYPES,
 } Flag_Type;
 
-static_assert(COUNT_FLAG_TYPES == 4, "Exhaustive Flag_Value definition");
-typedef union {
-    char *as_str;
-    uint64_t as_uint64;
-    bool as_bool;
-    size_t as_size;
-} Flag_Value;
-
-typedef enum {
+typedef enum Flag_Error_Enum {
     FLAG_NO_ERROR = 0,
     FLAG_ERROR_UNKNOWN,
     FLAG_ERROR_NO_VALUE,
@@ -66,12 +79,12 @@ typedef enum {
     COUNT_FLAG_ERRORS,
 } Flag_Error;
 
-typedef struct {
+typedef struct Flag_Struct {
     Flag_Type type;
     char *name;
     char *desc;
-    Flag_Value val;
-    Flag_Value def;
+    uintmax_t val;
+    uintmax_t def;
 } Flag;
 
 #ifndef FLAGS_CAP
@@ -105,42 +118,35 @@ Flag *flag_new(Flag_Type type, const char *name, const char *desc)
     return flag;
 }
 
+#define recast(var, type) (*((type*)&(var)))
+
+#define new_flag_impl(ftype, ctype, mname) \
+ctype *flag_ ## mname (const char *name, ctype def, const char *desc) \
+{ \
+    Flag *flag = flag_new(ftype, name, desc); \
+    recast(flag->val, ctype) = def; \
+    recast(flag->def, ctype) = def; \
+    return &recast(flag->val, ctype); \
+}
+
+new_flag_impl(FLAG_BOOL, bool, bool)
+new_flag_impl(FLAG_UINT8, uint8_t, uint8)
+new_flag_impl(FLAG_INT8, int8_t, int8)
+new_flag_impl(FLAG_UINT16, uint16_t, uint16)
+new_flag_impl(FLAG_INT16, int16_t, int16)
+new_flag_impl(FLAG_UINT32, uint32_t, uint32)
+new_flag_impl(FLAG_INT32, int32_t, int32)
+new_flag_impl(FLAG_UINT64, uint64_t, uint64)
+new_flag_impl(FLAG_INT64, int64_t, int64)
+new_flag_impl(FLAG_SIZE, size_t, size)
+new_flag_impl(FLAG_FLOAT, float, float)
+new_flag_impl(FLAG_DOUBLE, double, double)
+new_flag_impl(FLAG_STR, char*, str)
+
 char *flag_name(void *val)
 {
     Flag *flag = (Flag*) ((char*) val - offsetof(Flag, val));
     return flag->name;
-}
-
-bool *flag_bool(const char *name, bool def, const char *desc)
-{
-    Flag *flag = flag_new(FLAG_BOOL, name, desc);
-    flag->def.as_bool = def;
-    flag->val.as_bool = def;
-    return &flag->val.as_bool;
-}
-
-uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc)
-{
-    Flag *flag = flag_new(FLAG_UINT64, name, desc);
-    flag->val.as_uint64 = def;
-    flag->def.as_uint64 = def;
-    return &flag->val.as_uint64;
-}
-
-size_t *flag_size(const char *name, uint64_t def, const char *desc)
-{
-    Flag *flag = flag_new(FLAG_SIZE, name, desc);
-    flag->val.as_size = def;
-    flag->def.as_size = def;
-    return &flag->val.as_size;
-}
-
-char **flag_str(const char *name, const char *def, const char *desc)
-{
-    Flag *flag = flag_new(FLAG_STR, name, desc);
-    flag->val.as_str = (char*) def;
-    flag->def.as_str = (char*) def;
-    return &flag->val.as_str;
 }
 
 static char *flag_shift_args(int *argc, char ***argv)
@@ -161,6 +167,34 @@ char **flag_rest_argv(void)
 {
     return flag_global_context.rest_argv;
 }
+
+#define flag_test_has_value() \
+do { if (argc == 0) { \
+    c->flag_error = FLAG_ERROR_NO_VALUE; \
+    c->flag_error_name = flag; \
+    return false; \
+} } while (0)
+
+#define flag_test_invalid_number() \
+do { if (*endptr != '\0') { \
+    c->flag_error = FLAG_ERROR_INVALID_NUMBER; \
+    c->flag_error_name = flag; \
+    return false; \
+} } while (0)
+
+#define flag_test_signed_overflow(MIN, MAX) \
+do { if ((result <= MIN || result >= MAX) && errno == ERANGE) { \
+    c->flag_error = FLAG_ERROR_INTEGER_OVERFLOW; \
+    c->flag_error_name = flag; \
+    return false; \
+} } while (0)
+
+#define flag_test_unsigned_overflow(MAX) \
+do { if (result >= MAX && errno == ERANGE) { \
+    c->flag_error = FLAG_ERROR_INTEGER_OVERFLOW; \
+    c->flag_error_name = flag; \
+    return false; \
+} } while (0)
 
 bool flag_parse(int argc, char **argv)
 {
@@ -191,67 +225,146 @@ bool flag_parse(int argc, char **argv)
         bool found = false;
         for (size_t i = 0; i < c->flags_count; ++i) {
             if (strcmp(c->flags[i].name, flag) == 0) {
-                static_assert(COUNT_FLAG_TYPES == 4, "Exhaustive flag type parsing");
+                static_assert(COUNT_FLAG_TYPES == 13, "Exhaustive flag type parsing");
                 switch (c->flags[i].type) {
                 case FLAG_BOOL: {
-                    c->flags[i].val.as_bool = true;
+                    recast(c->flags[i].val, bool) = true;
                 }
                 break;
 
-                case FLAG_STR: {
-                    if (argc == 0) {
-                        c->flag_error = FLAG_ERROR_NO_VALUE;
-                        c->flag_error_name = flag;
-                        return false;
-                    }
+                // TODO: replace strtoumax, strtoimax in the following cases with a custom solution
+                // That way we can get rid of the dependency on errno and static_assert
+
+                case FLAG_INT8: {
+                    flag_test_has_value();
                     char *arg = flag_shift_args(&argc, &argv);
-                    c->flags[i].val.as_str = arg;
+
+                    static_assert(sizeof(char) == sizeof(int8_t), "Architecture mismatch");
+                    char *endptr;
+                    int8_t result = strtoimax(arg, &endptr, 10);
+
+                    flag_test_invalid_number();
+                    flag_test_signed_overflow(INT8_MIN, INT8_MAX);
+
+                    recast(c->flags[i].val, int8_t) = result;
+                }
+                break;
+
+                case FLAG_UINT8: {
+                    flag_test_has_value();
+                    char *arg = flag_shift_args(&argc, &argv);
+
+                    static_assert(sizeof(unsigned char) == sizeof(uint8_t), "Architecture mismatch");
+                    char *endptr;
+                    uint8_t result = strtoumax(arg, &endptr, 10);
+
+                    flag_test_invalid_number();
+                    flag_test_unsigned_overflow(UINT8_MAX);
+
+                    recast(c->flags[i].val, uint8_t) = result;
+                }
+                break;
+
+                case FLAG_INT16: {
+                    flag_test_has_value();
+                    char *arg = flag_shift_args(&argc, &argv);
+
+                    static_assert(sizeof(short) == sizeof(int16_t), "Architecture mismatch");
+                    char *endptr;
+                    int16_t result = strtoimax(arg, &endptr, 10);
+
+                    flag_test_invalid_number();
+                    flag_test_signed_overflow(INT16_MIN, INT16_MAX);
+
+                    recast(c->flags[i].val, int16_t) = result;
+                }
+                break;
+
+                case FLAG_UINT16: {
+                    flag_test_has_value();
+                    char *arg = flag_shift_args(&argc, &argv);
+
+                    static_assert(sizeof(unsigned short) == sizeof(uint16_t), "Architecture mismatch");
+                    char *endptr;
+                    uint16_t result = strtoumax(arg, &endptr, 10);
+
+                    flag_test_invalid_number();
+                    flag_test_unsigned_overflow(UINT16_MAX);
+
+                    recast(c->flags[i].val, uint16_t) = result;
+                }
+                break;
+
+                case FLAG_INT32: {
+                    flag_test_has_value();
+                    char *arg = flag_shift_args(&argc, &argv);
+
+                    static_assert(sizeof(int) == sizeof(int32_t), "Architecture mismatch");
+                    char *endptr;
+                    int32_t result = strtoimax(arg, &endptr, 10);
+
+                    flag_test_invalid_number();
+                    flag_test_signed_overflow(INT32_MIN, INT32_MAX);
+
+                    recast(c->flags[i].val, int32_t) = result;
+                }
+                break;
+
+                case FLAG_UINT32: {
+                    flag_test_has_value();
+                    char *arg = flag_shift_args(&argc, &argv);
+
+                    static_assert(sizeof(unsigned int) == sizeof(uint32_t), "Architecture mismatch");
+                    char *endptr;
+                    uint32_t result = strtoumax(arg, &endptr, 10);
+
+                    flag_test_invalid_number();
+                    flag_test_unsigned_overflow(UINT32_MAX);
+
+                    recast(c->flags[i].val, uint32_t) = result;
+                }
+                break;
+
+                case FLAG_INT64: {
+                    flag_test_has_value();
+                    char *arg = flag_shift_args(&argc, &argv);
+
+                    static_assert(sizeof(long) == sizeof(int64_t), "Architecture mismatch");
+                    char *endptr;
+                    int64_t result = strtoimax(arg, &endptr, 10);
+
+                    flag_test_invalid_number();
+                    flag_test_signed_overflow(INT64_MIN, INT64_MAX);
+
+                    recast(c->flags[i].val, int64_t) = result;
                 }
                 break;
 
                 case FLAG_UINT64: {
-                    if (argc == 0) {
-                        c->flag_error = FLAG_ERROR_NO_VALUE;
-                        c->flag_error_name = flag;
-                        return false;
-                    }
+                    flag_test_has_value();
                     char *arg = flag_shift_args(&argc, &argv);
 
-                    static_assert(sizeof(unsigned long long int) == sizeof(uint64_t), "The original author designed this for x86_64 machine with the compiler that expects unsigned long long int and uint64_t to be the same thing, so they could use strtoull() function to parse it. Please adjust this code for your case and maybe even send the patch to upstream to make it work on a wider range of environments.");
+                    static_assert(sizeof(unsigned long) == sizeof(uint64_t), "Architecture mismatch");
                     char *endptr;
-                    // TODO: replace strtoull with a custom solution
-                    // That way we can get rid of the dependency on errno and static_assert
-                    unsigned long long int result = strtoull(arg, &endptr, 10);
+                    uint64_t result = strtoumax(arg, &endptr, 10);
 
-                    if (*endptr != '\0') {
-                        c->flag_error = FLAG_ERROR_INVALID_NUMBER;
-                        c->flag_error_name = flag;
-                        return false;
-                    }
-                    
-                    if (result == ULLONG_MAX && errno == ERANGE) {
-                        c->flag_error = FLAG_ERROR_INTEGER_OVERFLOW;
-                        c->flag_error_name = flag;
-                        return false;
-                    }
+                    flag_test_invalid_number();
+                    flag_test_unsigned_overflow(UINT64_MAX);
 
-                    c->flags[i].val.as_uint64 = result;
+                    recast(c->flags[i].val, uint64_t) = result;
                 }
                 break;
 
                 case FLAG_SIZE: {
-                    if (argc == 0) {
-                        c->flag_error = FLAG_ERROR_NO_VALUE;
-                        c->flag_error_name = flag;
-                        return false;
-                    }
+                    flag_test_has_value();
                     char *arg = flag_shift_args(&argc, &argv);
 
-                    static_assert(sizeof(unsigned long long int) == sizeof(size_t), "The original author designed this for x86_64 machine with the compiler that expects unsigned long long int and size_t to be the same thing, so they could use strtoull() function to parse it. Please adjust this code for your case and maybe even send the patch to upstream to make it work on a wider range of environments.");
+                    static_assert(sizeof(unsigned long long int) == sizeof(size_t), "Architecture mismatch");
                     char *endptr;
-                    // TODO: replace strtoull with a custom solution
-                    // That way we can get rid of the dependency on errno and static_assert
-                    unsigned long long int result = strtoull(arg, &endptr, 10);
+                    size_t result = strtoumax(arg, &endptr, 10);
+
+                    flag_test_invalid_number();
+                    flag_test_unsigned_overflow(SIZE_MAX);
 
                     // TODO: handle more multiplicative suffixes like in dd(1). From the dd(1) man page:
                     // > N and BYTES may be followed by the following
@@ -270,15 +383,48 @@ bool flag_parse(int argc, char **argv)
                         c->flag_error_name = flag;
                         // TODO: capability to report what exactly is the wrong suffix
                         return false;
-                    }
+                    } 
 
-                    if (result == ULLONG_MAX && errno == ERANGE) {
-                        c->flag_error = FLAG_ERROR_INTEGER_OVERFLOW;
-                        c->flag_error_name = flag;
-                        return false;
-                    }
+                    flag_test_unsigned_overflow(SIZE_MAX);
 
-                    c->flags[i].val.as_size = result;
+                    recast(c->flags[i].val, size_t) = result;
+                }
+                break;
+
+                case FLAG_FLOAT: {
+                    flag_test_has_value();
+                    char *arg = flag_shift_args(&argc, &argv);
+
+                    char *endptr;
+                    float result = strtof(arg, &endptr);
+                    
+                    // TODO: floating point overflow/underflow test? currently sets values > FLT_MAX to inf (-inf for < -FLT_MAX)
+                    // is that what we want?
+                    flag_test_invalid_number();
+
+                    recast(c->flags[i].val, float) = result;
+                }
+                break;
+
+                case FLAG_DOUBLE: {
+                    flag_test_has_value();
+                    char *arg = flag_shift_args(&argc, &argv);
+
+                    char *endptr;
+                    double result = strtod(arg, &endptr);
+
+                    // TODO: floating point overflow test? currently sets values > DBL_MAX to infinity (-inf for < -DBL_MAX)
+                    // is that what we want?
+                    flag_test_invalid_number();
+
+                    recast(c->flags[i].val, double) = result;
+                }
+                break;
+
+                case FLAG_STR: {
+                    flag_test_has_value();
+                    char *arg = flag_shift_args(&argc, &argv);
+                    recast(c->flags[i].val, char*) = arg;
                 }
                 break;
 
@@ -305,36 +451,49 @@ bool flag_parse(int argc, char **argv)
     return true;
 }
 
+#define opt_fprintf_def(code, type, value) \
+do { if((type)flag->def) { fprintf(stream, " (Default: %" code ")", (value)); } } while(0)
+
 void flag_print_options(FILE *stream)
 {
     Flag_Context *c = &flag_global_context;
     for (size_t i = 0; i < c->flags_count; ++i) {
         Flag *flag = &c->flags[i];
 
-        fprintf(stream, "    -%s\n", flag->name);
-        fprintf(stream, "        %s\n", flag->desc);
-        static_assert(COUNT_FLAG_TYPES == 4, "Exhaustive flag type defaults printing");
+        fprintf(stream, "    -%s\n        %s", flag->name, flag->desc);
+        static_assert(COUNT_FLAG_TYPES == 13, "Exhaustive flag type defaults printing");
         switch (c->flags[i].type) {
         case FLAG_BOOL:
-            if (flag->def.as_bool) {
-                fprintf(stream, "        Default: %s\n", flag->def.as_bool ? "true" : "false");
-            }
-            break;
+            opt_fprintf_def("s", bool, (bool)flag->def ? "true" : "false"); break;
+        case FLAG_INT8:
+            opt_fprintf_def(PRIi8, int8_t, (int8_t)flag->def); break;
+        case FLAG_UINT8:
+            opt_fprintf_def(PRIu8, uint8_t, (uint8_t)flag->def); break;
+        case FLAG_INT16:
+            opt_fprintf_def(PRIi16, int16_t, (int16_t)flag->def); break;
+        case FLAG_UINT16:
+            opt_fprintf_def(PRIu16, uint16_t, (uint16_t)flag->def); break;
+        case FLAG_INT32:
+            opt_fprintf_def(PRIi32, int32_t, (int32_t)flag->def); break;
+        case FLAG_UINT32:
+            opt_fprintf_def(PRIu32, uint32_t, (uint32_t)flag->def); break;
+        case FLAG_INT64:
+            opt_fprintf_def(PRIi64, int64_t, (int64_t)flag->def); break;
         case FLAG_UINT64:
-            fprintf(stream, "        Default: %" PRIu64 "\n", flag->def.as_uint64);
-            break;
+            opt_fprintf_def(PRIu64, uint64_t, (uint64_t)flag->def); break;
         case FLAG_SIZE:
-            fprintf(stream, "        Default: %zu\n", flag->def.as_size);
-            break;
+            opt_fprintf_def("zu", size_t, (size_t)flag->def); break;
         case FLAG_STR:
-            if (flag->def.as_str) {
-                fprintf(stream, "        Default: %s\n", flag->def.as_str);
-            }
-            break;
+            opt_fprintf_def("s", char*, (char*)flag->def); break;
+        case FLAG_FLOAT:
+            opt_fprintf_def("f", float, recast(flag->def, float)); break;
+        case FLAG_DOUBLE:
+            opt_fprintf_def("f", double, recast(flag->def, double)); break;
         default:
             assert(0 && "unreachable");
             exit(69);
         }
+        fprintf(stream, "\n");
     }
 }
 

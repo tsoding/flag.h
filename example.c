@@ -16,6 +16,7 @@ int main(int argc, char **argv)
     bool *help = flag_bool("help", false, "Print this help to stdout and exit with 0");
     char **line = flag_str("line", "Hi!", "Line to output to the file");
     size_t *count = flag_size("count", 64, "Amount of lines to generate");
+    float *test = flag_float("test", 12.0f, "A test float");
 
     if (!flag_parse(argc, argv)) {
         usage(stderr);
@@ -50,6 +51,8 @@ int main(int argc, char **argv)
 
         printf("Generated %" PRIu64 " lines in %s\n", *count, file_path);
     }
+
+    printf("Test: %f\n", *test);
 
     return 0;
 }
