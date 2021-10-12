@@ -23,19 +23,53 @@
 // etc.
 // WARNING! *_var functions may break the flag_name() functionalitys
 
-bool *flag_bool (const char *name, bool def, const char *desc);
-uint8_t *flag_uint8 (const char *name, uint8_t def, const char *desc);
-int8_t *flag_int8 (const char *name, int8_t def, const char *desc);
-uint16_t *flag_uint16 (const char *name, uint16_t def, const char *desc);
-int16_t *flag_int16 (const char *name, int16_t def, const char *desc);
-uint32_t *flag_uint32 (const char *name, uint32_t def, const char *desc);
-int32_t *flag_int32 (const char *name, int32_t def, const char *desc);
-uint64_t *flag_uint64 (const char *name, uint64_t def, const char *desc);
-int64_t *flag_int64 (const char *name, int64_t def, const char *desc);
-size_t *flag_size (const char *name, size_t def, const char *desc);
-float *flag_float (const char *name, float def, const char *desc);
-double *flag_double (const char *name, double def, const char *desc);
-char **flag_str (const char *name, char* def, const char *desc);
+bool *flag_bool (const char *name, const char *desc);
+uint8_t *flag_uint8 (const char *name, const char *desc);
+int8_t *flag_int8 (const char *name, const char *desc);
+uint16_t *flag_uint16 (const char *name, const char *desc);
+int16_t *flag_int16 (const char *name, const char *desc);
+uint32_t *flag_uint32 (const char *name, const char *desc);
+int32_t *flag_int32 (const char *name, const char *desc);
+uint64_t *flag_uint64 (const char *name, const char *desc);
+int64_t *flag_int64 (const char *name, const char *desc);
+size_t *flag_size (const char *name, const char *desc);
+float *flag_float (const char *name, const char *desc);
+double *flag_double (const char *name, const char *desc);
+char **flag_str (const char *name, const char *desc);
+
+#if __STDC_VERSION__ >= 201112L
+#define flag_default(val, def) _Generic((val), \
+        bool*: flag_bool_default, \
+      int8_t*: flag_int8_default, \
+     uint8_t*:  flag_uint8_default, \
+     int16_t*: flag_int16_default, \
+    uint16_t*: flag_uint16_default, \
+     int32_t*: flag_int32_default, \
+    uint32_t*: flag_uint32_default, \
+     int64_t*: flag_int64_default, \
+    uint64_t*: flag_uint64_default, \
+       char**: flag_str_default, \
+       float*: flag_float_default, \
+      double*: flag_double_default, \
+      default: ((void*)0) \
+    )(val, def)
+#endif
+
+void flag_bool_default(bool *val, bool def);
+void flag_uint8_default(uint8_t *val, uint8_t def);
+void flag_int8_default(int8_t *val, int8_t def);
+void flag_uint16_default(uint16_t *val, uint16_t def);
+void flag_int16_default(int16_t *val, int16_t def);
+void flag_uint32_default(uint32_t *val, uint32_t def);
+void flag_int32_default(int32_t *val, int32_t def);
+void flag_uint64_default(uint64_t *val, uint64_t def);
+void flag_int64_default(int64_t *val, int64_t def);
+void flag_size_default(size_t *val, size_t def);
+void flag_float_default(float *val, float def);
+void flag_double_default(double *val, double def);
+void flag_str_default(char **val, char *def);
+
+void flag_required(void *val, bool req);
 
 char *flag_name(void *val);
 
@@ -51,6 +85,8 @@ void flag_print_options(FILE *stream);
 //////////////////////////////
 
 #ifdef FLAG_IMPLEMENTATION
+
+#define recast(var, type) (*((type*)&(var)))
 
 typedef enum Flag_Type_Enum {
     FLAG_BOOL = 0,
@@ -76,6 +112,7 @@ typedef enum Flag_Error_Enum {
     FLAG_ERROR_INVALID_NUMBER,
     FLAG_ERROR_INTEGER_OVERFLOW,
     FLAG_ERROR_INVALID_SIZE_SUFFIX,
+    FLAG_ERROR_REQUIRED,
     COUNT_FLAG_ERRORS,
 } Flag_Error;
 
@@ -83,15 +120,15 @@ typedef struct Flag_Struct {
     Flag_Type type;
     char *name;
     char *desc;
-    uintmax_t val;
-    uintmax_t def;
+    bool req;
+    uintmax_t val, def;
 } Flag;
 
 #ifndef FLAGS_CAP
 #define FLAGS_CAP 256
 #endif
 
-typedef struct {
+typedef struct Flag_Context_Struct {
     Flag flags[FLAGS_CAP];
     size_t flags_count;
 
@@ -118,16 +155,19 @@ Flag *flag_new(Flag_Type type, const char *name, const char *desc)
     return flag;
 }
 
-#define recast(var, type) (*((type*)&(var)))
 
 #define new_flag_impl(ftype, ctype, mname) \
-ctype *flag_ ## mname (const char *name, ctype def, const char *desc) \
+ctype *flag_ ## mname (const char *name, const char *desc) \
 { \
     Flag *flag = flag_new(ftype, name, desc); \
-    recast(flag->val, ctype) = def; \
-    recast(flag->def, ctype) = def; \
     return &recast(flag->val, ctype); \
-}
+} \
+\
+void flag_ ## mname ## _default(ctype *val, ctype def) \
+{ \
+    Flag *flag = (Flag*) ((char*) val - offsetof(Flag, val)); \
+    *((ctype*)&(flag->val)) = *((ctype*)&(flag->def)) = def; \
+} 
 
 new_flag_impl(FLAG_BOOL, bool, bool)
 new_flag_impl(FLAG_UINT8, uint8_t, uint8)
@@ -142,6 +182,12 @@ new_flag_impl(FLAG_SIZE, size_t, size)
 new_flag_impl(FLAG_FLOAT, float, float)
 new_flag_impl(FLAG_DOUBLE, double, double)
 new_flag_impl(FLAG_STR, char*, str)
+
+void flag_required(void *val, bool req)
+{
+    Flag *flag = (Flag*) ((char*) val - offsetof(Flag, val));
+    flag->req = req;
+}
 
 char *flag_name(void *val)
 {
@@ -209,14 +255,14 @@ bool flag_parse(int argc, char **argv)
             // NOTE: pushing flag back into args
             c->rest_argc = argc + 1;
             c->rest_argv = argv - 1;
-            return true;
+            goto success;
         }
 
         if (strcmp(flag, "--") == 0) {
             // NOTE: but if it's the terminator we don't need to push it back
             c->rest_argc = argc;
             c->rest_argv = argv;
-            return true;
+            goto success;
         }
 
         // NOTE: remove the dash
@@ -329,7 +375,7 @@ bool flag_parse(int argc, char **argv)
                     flag_test_has_value();
                     char *arg = flag_shift_args(&argc, &argv);
 
-                    static_assert(sizeof(long) == sizeof(int64_t), "Architecture mismatch");
+                    static_assert(sizeof(long long) == sizeof(int64_t), "Architecture mismatch");
                     char *endptr;
                     int64_t result = strtoimax(arg, &endptr, 10);
 
@@ -344,7 +390,7 @@ bool flag_parse(int argc, char **argv)
                     flag_test_has_value();
                     char *arg = flag_shift_args(&argc, &argv);
 
-                    static_assert(sizeof(unsigned long) == sizeof(uint64_t), "Architecture mismatch");
+                    static_assert(sizeof(unsigned long long) == sizeof(uint64_t), "Architecture mismatch");
                     char *endptr;
                     uint64_t result = strtoumax(arg, &endptr, 10);
 
@@ -359,7 +405,7 @@ bool flag_parse(int argc, char **argv)
                     flag_test_has_value();
                     char *arg = flag_shift_args(&argc, &argv);
 
-                    static_assert(sizeof(unsigned long long int) == sizeof(size_t), "Architecture mismatch");
+                    static_assert(sizeof(unsigned long long) == sizeof(size_t), "Architecture mismatch");
                     char *endptr;
                     size_t result = strtoumax(arg, &endptr, 10);
 
@@ -381,7 +427,6 @@ bool flag_parse(int argc, char **argv)
                     } else if (strcmp(endptr, "") != 0) {
                         c->flag_error = FLAG_ERROR_INVALID_SIZE_SUFFIX;
                         c->flag_error_name = flag;
-                        // TODO: capability to report what exactly is the wrong suffix
                         return false;
                     } 
 
@@ -446,13 +491,24 @@ bool flag_parse(int argc, char **argv)
         }
     }
 
-    c->rest_argc = argc;
-    c->rest_argv = argv;
+success:
+
+    for (size_t i = 0; i < c->flags_count; ++i)
+    {
+        Flag f = c->flags[i];
+        if(f.req && f.val == f.def)
+        {
+            c->flag_error = FLAG_ERROR_REQUIRED;
+            c->flag_error_name = f.name;
+            return false;
+        }
+    }
+
     return true;
 }
 
 #define opt_fprintf_def(code, type, value) \
-do { if((type)flag->def) { fprintf(stream, " (Default: %" code ")", (value)); } } while(0)
+do { if((type)flag->def) { fprintf(stream, "\n        Default: %" code, (value)); } } while(0)
 
 void flag_print_options(FILE *stream)
 {
@@ -460,7 +516,7 @@ void flag_print_options(FILE *stream)
     for (size_t i = 0; i < c->flags_count; ++i) {
         Flag *flag = &c->flags[i];
 
-        fprintf(stream, "    -%s\n        %s", flag->name, flag->desc);
+        fprintf(stream, "    -%s%s\n        %s", flag->name, flag->req ? " (Required)" : "", flag->desc);
         static_assert(COUNT_FLAG_TYPES == 13, "Exhaustive flag type defaults printing");
         switch (c->flags[i].type) {
         case FLAG_BOOL:
@@ -500,7 +556,7 @@ void flag_print_options(FILE *stream)
 void flag_print_error(FILE *stream)
 {
     Flag_Context *c = &flag_global_context;
-    static_assert(COUNT_FLAG_ERRORS == 6, "Exhaustive flag error printing");
+    static_assert(COUNT_FLAG_ERRORS == 7, "Exhaustive flag error printing");
     switch (c->flag_error) {
     case FLAG_NO_ERROR:
         // NOTE: don't call flag_print_error() if flag_parse() didn't return false, okay? ._.
@@ -521,6 +577,9 @@ void flag_print_error(FILE *stream)
     case FLAG_ERROR_INVALID_SIZE_SUFFIX:
         fprintf(stream, "ERROR: -%s: invalid size suffix\n", c->flag_error_name);
         break;
+    case FLAG_ERROR_REQUIRED:
+        fprintf(stream, "ERROR: -%s: value is required\n", c->flag_error_name);
+        break;
     case COUNT_FLAG_ERRORS:
     default:
         assert(0 && "unreachable");
@@ -529,6 +588,7 @@ void flag_print_error(FILE *stream)
 }
 
 #endif
+
 // Copyright 2021 Alexey Kutepov <reximkut@gmail.com>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy

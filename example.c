@@ -13,20 +13,25 @@ void usage(FILE *stream)
 
 int main(int argc, char **argv)
 {
-    bool *help = flag_bool("help", false, "Print this help to stdout and exit with 0");
-    char **line = flag_str("line", "Hi!", "Line to output to the file");
-    size_t *count = flag_size("count", 64, "Amount of lines to generate");
-    float *test = flag_float("test", 12.0f, "A test float");
+    bool *help = flag_bool("help", "Print this help to stdout and exit with 0");
+    char **line = flag_str("line", "Line to output to the file");
+    flag_default(line, "Hey");
+    size_t *count = flag_size("count", "Amount of lines to generate");
+    flag_default(count, 128);
+    flag_required(count, true);
+    float *test = flag_float("test", "A test float");
 
-    if (!flag_parse(argc, argv)) {
-        usage(stderr);
-        flag_print_error(stderr);
-        exit(1);
-    }
+    bool argr = flag_parse(argc, argv);
 
     if (*help) {
         usage(stdout);
         exit(0);
+    }
+
+    if (!argr) {
+        usage(stderr);
+        flag_print_error(stderr);
+        exit(1);
     }
 
     int rest_argc = flag_rest_argc();
