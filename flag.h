@@ -53,6 +53,8 @@ char **flag_str (const char *name, const char *desc);
       double*: flag_double_default, \
       default: ((void*)0) \
     )(val, def)
+#elif __cplusplus
+template <typename T> void flag_default(void *val, T def);
 #endif
 
 void flag_bool_default(bool *val, bool def);
@@ -121,7 +123,7 @@ typedef struct Flag_Struct {
     char *name;
     char *desc;
     bool req;
-    uintmax_t val, def;
+    uintptr_t val, def;
 } Flag;
 
 #ifndef FLAGS_CAP
@@ -166,8 +168,17 @@ ctype *flag_ ## mname (const char *name, const char *desc) \
 void flag_ ## mname ## _default(ctype *val, ctype def) \
 { \
     Flag *flag = (Flag*) ((char*) val - offsetof(Flag, val)); \
-    *((ctype*)&(flag->val)) = *((ctype*)&(flag->def)) = def; \
-} 
+    recast(flag->val, ctype) = recast(flag->def, ctype) = def; \
+}
+
+#ifdef __cplusplus
+template<typename T>
+void flag_default(void *val, T def)
+{
+    Flag *flag = (Flag*) ((char*) val - offsetof(Flag, val));
+    flag->val = flag->def = recast(def, uintptr_t);
+}
+#endif
 
 new_flag_impl(FLAG_BOOL, bool, bool)
 new_flag_impl(FLAG_UINT8, uint8_t, uint8)

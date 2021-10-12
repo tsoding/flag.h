@@ -17,7 +17,7 @@ int main(int argc, char **argv)
     char **line = flag_str("line", "Line to output to the file");
     flag_default(line, "Hey");
     size_t *count = flag_size("count", "Amount of lines to generate");
-    flag_default(count, 128);
+    flag_default(count, 128.0f);
     flag_required(count, true);
     float *test = flag_float("test", "A test float");
 
