@@ -25,6 +25,7 @@
 // WARNING! *_var functions may break the flag_name() functionality
 
 char *flag_name(void *val);
+void flag_add_alias(void *val, const char *alias);
 bool *flag_bool_null(const char *name, bool def, const char *desc, ...);
 #define flag_bool(name, def, desc) flag_bool_null(name, def, desc, NULL)
 #define flag_bool_aliases(name, def, desc, ...)                                        \
@@ -86,7 +87,7 @@ typedef enum {
 typedef struct {
     Flag_Type type;
     char *name;
-    char *aliases[ALIAS_CAP];
+    const char *aliases[ALIAS_CAP];
     size_t alias_count;
     char *desc;
     Flag_Value val;
@@ -121,10 +122,11 @@ Flag *flag_new(Flag_Type type, const char *name, const char *desc, va_list alias
     // NOTE: I won't touch them I promise Kappa
     flag->name = (char*) name;
     flag->desc = (char*) desc;
-    char *alias = va_arg(aliases, char *);
+    const char *alias = va_arg(aliases, const char *);
     while (alias != NULL) {
+        assert(flag->alias_count <= ALIAS_CAP);
         flag->aliases[flag->alias_count++] = alias;
-        alias = va_arg(aliases, char *);
+        alias = va_arg(aliases, const char *);
     }
     return flag;
 }
@@ -133,6 +135,13 @@ char *flag_name(void *val)
 {
     Flag *flag = (Flag*) ((char*) val - offsetof(Flag, val));
     return flag->name;
+}
+
+void flag_add_alias(void *val, const char *alias)
+{
+    Flag *flag = (Flag*) ((char*) val - offsetof(Flag, val));
+    assert(flag->alias_count + 1 <= ALIAS_CAP);
+    flag->aliases[flag->alias_count++] = alias;
 }
 
 bool *flag_bool_null(const char *name, bool def, const char *desc, ...)
