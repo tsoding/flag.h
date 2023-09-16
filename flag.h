@@ -26,7 +26,7 @@
 
 char *flag_name(void *val);
 bool *flag_bool_null(const char *name, bool def, const char *desc, ...);
-#define flag_bool(name, def, desc) flag_bool_null(name, def, desc)
+#define flag_bool(name, def, desc) flag_bool_null(name, def, desc, NULL)
 #define flag_bool_aliases(name, def, desc, ...)                                        \
   flag_bool_null(name, def, desc, __VA_ARGS__, NULL)
 uint64_t *flag_uint64_null(const char *name, uint64_t def, const char *desc, ...);
