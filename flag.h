@@ -14,7 +14,7 @@
 #include <inttypes.h>
 #include <limits.h>
 #include <string.h>
-#include <errno.h>
+#include <ctype.h>
 
 // TODO: add support for -flag=x syntax
 // TODO: *_var function variants
@@ -162,6 +162,48 @@ char **flag_rest_argv(void)
     return flag_global_context.rest_argv;
 }
 
+#define parse_unsigned_int(type, max, nptr, endptr)                         \
+    do {                                                                       \
+      Flag_Context *context = &flag_global_context;                            \
+                                                                               \
+      const char *s = (nptr);                                                  \
+      char c;                                                                  \
+                                                                               \
+      do {                                                                     \
+        c = *s++;                                                              \
+      } while (isspace(c));                                                    \
+                                                                               \
+      type acc;                                                                \
+      bool any;                                                                \
+      type cutoff = (type)max / (type)10;                                      \
+      int cutlim = (type)max % (type)10;                                       \
+      for (acc = 0, any = false;; c = *s++) {                                  \
+        if (!isdigit(c))                                                       \
+          break;                                                               \
+        if (acc > cutoff || (acc == cutoff && c > cutlim)) {                   \
+          context->flag_error = FLAG_ERROR_INTEGER_OVERFLOW;                   \
+          return max;                                                          \
+        } else {                                                               \
+          any = true;                                                          \
+          acc *= 10;                                                           \
+          acc += c - '0';                                                      \
+        }                                                                      \
+      }                                                                        \
+      if (endptr != 0)                                                         \
+        *endptr = (char *)(any ? s - 1 : nptr);                                \
+      return acc;                                                              \
+    } while (0);
+
+uint64_t parse_uint64_flag(const char *nptr, char **endptr)
+{
+    parse_unsigned_int(uint64_t, UINT64_MAX, nptr, endptr);
+}
+
+size_t parse_size_flag(const char *nptr, char **endptr)
+{
+    parse_unsigned_int(size_t, SIZE_MAX, nptr, endptr);
+}
+
 bool flag_parse(int argc, char **argv)
 {
     Flag_Context *c = &flag_global_context;
@@ -217,20 +259,17 @@ bool flag_parse(int argc, char **argv)
                     }
                     char *arg = flag_shift_args(&argc, &argv);
 
-                    static_assert(sizeof(unsigned long long int) == sizeof(uint64_t), "The original author designed this for x86_64 machine with the compiler that expects unsigned long long int and uint64_t to be the same thing, so they could use strtoull() function to parse it. Please adjust this code for your case and maybe even send the patch to upstream to make it work on a wider range of environments.");
                     char *endptr;
-                    // TODO: replace strtoull with a custom solution
-                    // That way we can get rid of the dependency on errno and static_assert
-                    unsigned long long int result = strtoull(arg, &endptr, 10);
+                    uint64_t result = parse_uint64_flag(arg, &endptr);
 
                     if (*endptr != '\0') {
                         c->flag_error = FLAG_ERROR_INVALID_NUMBER;
                         c->flag_error_name = flag;
                         return false;
                     }
-                    
-                    if (result == ULLONG_MAX && errno == ERANGE) {
-                        c->flag_error = FLAG_ERROR_INTEGER_OVERFLOW;
+
+                    if (result == UINT64_MAX &&
+                        c->flag_error == FLAG_ERROR_INTEGER_OVERFLOW) {
                         c->flag_error_name = flag;
                         return false;
                     }
@@ -247,11 +286,8 @@ bool flag_parse(int argc, char **argv)
                     }
                     char *arg = flag_shift_args(&argc, &argv);
 
-                    static_assert(sizeof(unsigned long long int) == sizeof(size_t), "The original author designed this for x86_64 machine with the compiler that expects unsigned long long int and size_t to be the same thing, so they could use strtoull() function to parse it. Please adjust this code for your case and maybe even send the patch to upstream to make it work on a wider range of environments.");
                     char *endptr;
-                    // TODO: replace strtoull with a custom solution
-                    // That way we can get rid of the dependency on errno and static_assert
-                    unsigned long long int result = strtoull(arg, &endptr, 10);
+                    size_t result = parse_size_flag(arg, &endptr);
 
                     // TODO: handle more multiplicative suffixes like in dd(1). From the dd(1) man page:
                     // > N and BYTES may be followed by the following
@@ -272,8 +308,8 @@ bool flag_parse(int argc, char **argv)
                         return false;
                     }
 
-                    if (result == ULLONG_MAX && errno == ERANGE) {
-                        c->flag_error = FLAG_ERROR_INTEGER_OVERFLOW;
+                    if (result == SIZE_MAX &&
+                        c->flag_error == FLAG_ERROR_INTEGER_OVERFLOW) {
                         c->flag_error_name = flag;
                         return false;
                     }
