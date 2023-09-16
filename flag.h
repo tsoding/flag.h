@@ -233,9 +233,11 @@ bool flag_parse(int argc, char **argv)
         for (size_t i = 0; i < c->flags_count; ++i) {
             bool is_name = strcmp(c->flags[i].name, flag) == 0;
             bool is_alias = false;
-            for (size_t j = 0; !is_alias && j < c->flags[i].alias_count; ++j) {
-                if (strcmp(c->flags[i].aliases[j], flag) == 0)
-                    is_alias = true;
+            if (!is_name) {
+                for (size_t j = 0; !is_alias && j < c->flags[i].alias_count; ++j) {
+                    if (strcmp(c->flags[i].aliases[j], flag) == 0)
+                        is_alias = true;
+                }
             }
             if (is_name || is_alias) {
                 static_assert(COUNT_FLAG_TYPES == 4, "Exhaustive flag type parsing");
