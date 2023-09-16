@@ -13,9 +13,9 @@ void usage(FILE *stream)
 
 int main(int argc, char **argv)
 {
-    bool *help = flag_bool("help", false, "Print this help to stdout and exit with 0");
-    char **line = flag_str("line", "Hi!", "Line to output to the file");
-    size_t *count = flag_size("count", 64, "Amount of lines to generate");
+    bool *help = flag_bool_aliases("-help", false, "Print this help to stdout and exit with 0", "h");
+    char **line = flag_str_aliases("-line", "Hi!", "Line to output to the file", "l");
+    size_t *count = flag_size_aliases("-count", 64, "Amount of lines to generate", "c");
 
     if (!flag_parse(argc, argv)) {
         usage(stderr);

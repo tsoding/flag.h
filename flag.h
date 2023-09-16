@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <inttypes.h>
@@ -24,10 +25,22 @@
 // WARNING! *_var functions may break the flag_name() functionality
 
 char *flag_name(void *val);
-bool *flag_bool(const char *name, bool def, const char *desc);
-uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc);
-size_t *flag_size(const char *name, uint64_t def, const char *desc);
-char **flag_str(const char *name, const char *def, const char *desc);
+bool *flag_bool_null(const char *name, bool def, const char *desc, ...);
+#define flag_bool(name, def, desc) flag_bool_null(name, def, desc)
+#define flag_bool_aliases(name, def, desc, ...)                                        \
+  flag_bool_null(name, def, desc, __VA_ARGS__, NULL)
+uint64_t *flag_uint64_null(const char *name, uint64_t def, const char *desc, ...);
+#define flag_uint64(name, def, desc) flag_uint64_null(name, def, desc, NULL)
+#define flag_uint64_aliases(name, def, desc, ...)                              \
+  flag_uint64_null(name, def, desc, __VA_ARGS__, NULL)
+size_t *flag_size_null(const char *name, uint64_t def, const char *desc, ...);
+#define flag_size(name, def, desc) flag_size_null(name, def, desc, NULL)
+#define flag_size_aliases(name, def, desc, ...) \
+    flag_size_null(name, def, desc, __VA_ARGS__, NULL)
+char **flag_str_null(const char *name, const char *def, const char *desc, ...);
+#define flag_str(name, def, desc) flag_str_null(name, def, desc, NULL)
+#define flag_str_aliases(name, def, desc, ...)                                         \
+  flag_str_null(name, def, desc, __VA_ARGS__, NULL)
 bool flag_parse(int argc, char **argv);
 int flag_rest_argc(void);
 char **flag_rest_argv(void);
@@ -66,9 +79,15 @@ typedef enum {
     COUNT_FLAG_ERRORS,
 } Flag_Error;
 
+#ifndef ALIAS_CAP
+#define ALIAS_CAP 12
+#endif // ALIAS_CAP
+
 typedef struct {
     Flag_Type type;
     char *name;
+    char *aliases[ALIAS_CAP];
+    size_t alias_count;
     char *desc;
     Flag_Value val;
     Flag_Value def;
@@ -91,7 +110,7 @@ typedef struct {
 
 static Flag_Context flag_global_context;
 
-Flag *flag_new(Flag_Type type, const char *name, const char *desc)
+Flag *flag_new(Flag_Type type, const char *name, const char *desc, va_list aliases)
 {
     Flag_Context *c = &flag_global_context;
 
@@ -102,6 +121,11 @@ Flag *flag_new(Flag_Type type, const char *name, const char *desc)
     // NOTE: I won't touch them I promise Kappa
     flag->name = (char*) name;
     flag->desc = (char*) desc;
+    char *alias = va_arg(aliases, char *);
+    while (alias != NULL) {
+        flag->aliases[flag->alias_count++] = alias;
+        alias = va_arg(aliases, char *);
+    }
     return flag;
 }
 
@@ -111,33 +135,41 @@ char *flag_name(void *val)
     return flag->name;
 }
 
-bool *flag_bool(const char *name, bool def, const char *desc)
+bool *flag_bool_null(const char *name, bool def, const char *desc, ...)
 {
-    Flag *flag = flag_new(FLAG_BOOL, name, desc);
+    va_list aliases;
+    va_start(aliases, desc);
+    Flag *flag = flag_new(FLAG_BOOL, name, desc, aliases);
     flag->def.as_bool = def;
     flag->val.as_bool = def;
     return &flag->val.as_bool;
 }
 
-uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc)
+uint64_t *flag_uint64_null(const char *name, uint64_t def, const char *desc, ...)
 {
-    Flag *flag = flag_new(FLAG_UINT64, name, desc);
+    va_list aliases;
+    va_start(aliases, desc);
+    Flag *flag = flag_new(FLAG_UINT64, name, desc, aliases);
     flag->val.as_uint64 = def;
     flag->def.as_uint64 = def;
     return &flag->val.as_uint64;
 }
 
-size_t *flag_size(const char *name, uint64_t def, const char *desc)
+size_t *flag_size_null(const char *name, uint64_t def, const char *desc, ...)
 {
-    Flag *flag = flag_new(FLAG_SIZE, name, desc);
+    va_list aliases;
+    va_start(aliases, desc);
+    Flag *flag = flag_new(FLAG_SIZE, name, desc, aliases);
     flag->val.as_size = def;
     flag->def.as_size = def;
     return &flag->val.as_size;
 }
 
-char **flag_str(const char *name, const char *def, const char *desc)
+char **flag_str_null(const char *name, const char *def, const char *desc, ...)
 {
-    Flag *flag = flag_new(FLAG_STR, name, desc);
+    va_list aliases;
+    va_start(aliases, desc);
+    Flag *flag = flag_new(FLAG_STR, name, desc, aliases);
     flag->val.as_str = (char*) def;
     flag->def.as_str = (char*) def;
     return &flag->val.as_str;
@@ -190,7 +222,13 @@ bool flag_parse(int argc, char **argv)
 
         bool found = false;
         for (size_t i = 0; i < c->flags_count; ++i) {
-            if (strcmp(c->flags[i].name, flag) == 0) {
+            bool is_name = strcmp(c->flags[i].name, flag) == 0;
+            bool is_alias = false;
+            for (size_t j = 0; !is_alias && j < c->flags[i].alias_count; ++j) {
+                if (strcmp(c->flags[i].aliases[j], flag) == 0)
+                    is_alias = true;
+            }
+            if (is_name || is_alias) {
                 static_assert(COUNT_FLAG_TYPES == 4, "Exhaustive flag type parsing");
                 switch (c->flags[i].type) {
                 case FLAG_BOOL: {
@@ -311,7 +349,10 @@ void flag_print_options(FILE *stream)
     for (size_t i = 0; i < c->flags_count; ++i) {
         Flag *flag = &c->flags[i];
 
-        fprintf(stream, "    -%s\n", flag->name);
+        fprintf(stream, "    -%s", flag->name);
+        for (size_t j = 0; j < flag->alias_count; ++j)
+            fprintf(stream, ", -%s", flag->aliases[j]);
+        fprintf(stream, "\n");
         fprintf(stream, "        %s\n", flag->desc);
         static_assert(COUNT_FLAG_TYPES == 4, "Exhaustive flag type defaults printing");
         switch (c->flags[i].type) {
