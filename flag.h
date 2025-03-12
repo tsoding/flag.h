@@ -1,4 +1,4 @@
-// flag.h -- command-line flag parsing
+// flag.h -- v1.0.0 -- command-line flag parsing
 //
 //   Inspired by Go's flag module: https://pkg.go.dev/flag
 //
@@ -85,6 +85,8 @@ typedef struct {
     Flag_Error flag_error;
     char *flag_error_name;
 
+    const char *program_name;
+
     int rest_argc;
     char **rest_argv;
 } Flag_Context;
@@ -162,11 +164,18 @@ char **flag_rest_argv(void)
     return flag_global_context.rest_argv;
 }
 
+const char *flag_program_name(void)
+{
+    return flag_global_context.program_name;
+}
+
 bool flag_parse(int argc, char **argv)
 {
     Flag_Context *c = &flag_global_context;
 
-    flag_shift_args(&argc, &argv);
+    if (c->program_name == NULL) {
+        c->program_name = flag_shift_args(&argc, &argv);
+    }
 
     while (argc > 0) {
         char *flag = flag_shift_args(&argc, &argv);
@@ -228,7 +237,7 @@ bool flag_parse(int argc, char **argv)
                         c->flag_error_name = flag;
                         return false;
                     }
-                    
+
                     if (result == ULLONG_MAX && errno == ERANGE) {
                         c->flag_error = FLAG_ERROR_INTEGER_OVERFLOW;
                         c->flag_error_name = flag;
@@ -369,7 +378,16 @@ void flag_print_error(FILE *stream)
     }
 }
 
-#endif
+#endif // FLAG_IMPLEMENTATION
+
+/*
+   Revision history:
+
+     1.0.0 (2025-03-03) Initial release
+                        Save program_name in the context
+
+*/
+
 // Copyright 2021 Alexey Kutepov <reximkut@gmail.com>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
