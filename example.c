@@ -16,6 +16,7 @@ int main(int argc, char **argv)
     bool *help = flag_bool("help", false, "Print this help to stdout and exit with 0");
     char **line = flag_str("line", "Hi!", "Line to output to the file");
     size_t *count = flag_size("count", 64, "Amount of lines to generate");
+    Flag_List *extra = flag_list("L", "Extra lines to append to the end");
 
     if (!flag_parse(argc, argv)) {
         usage(stderr);
@@ -45,10 +46,13 @@ int main(int argc, char **argv)
         for (size_t i = 0; i < *count; ++i) {
             fprintf(f, "%s\n", *line);
         }
+        for (size_t i = 0; i < extra->count; ++i) {
+            fprintf(f, "%s\n", extra->items[i]);
+        }
 
         fclose(f);
 
-        printf("Generated %" PRIu64 " lines in %s\n", *count, file_path);
+        printf("Generated %" PRIu64 " lines in %s\n", *count + extra->count, file_path);
     }
 
     return 0;
