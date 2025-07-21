@@ -1,4 +1,4 @@
-// flag.h -- v1.2.1 -- command-line flag parsing
+// flag.h -- v1.3.0 -- command-line flag parsing
 //
 //   Inspired by Go's flag module: https://pkg.go.dev/flag
 //
@@ -473,6 +473,7 @@ void flag_print_error(FILE *stream)
 /*
    Revision history:
 
+     1.3.0 (2025-07-21) Add support for `-key=value` syntax (by @ej-shafran)
      1.2.1 (2025-07-04) flag_print_options: denote expected argument types
                         flag_print_options: indicate flag list usage more clearly
      1.2.0 (2025-05-31) Introduce FLAG_PUSH_DASH_DASH_BACK (by @nullnominal)
