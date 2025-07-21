@@ -206,26 +206,34 @@ bool flag_parse(int argc, char **argv)
                 break;
 
                 case FLAG_STR: {
-                    if (equals == NULL && argc == 0) {
-                        c->flag_error = FLAG_ERROR_NO_VALUE;
-                        c->flag_error_name = flag;
-                        return false;
+                    char *arg;
+                    if (equals == NULL) {
+                        if (argc == 0) {
+                            c->flag_error = FLAG_ERROR_NO_VALUE;
+                            c->flag_error_name = flag;
+                            return false;
+                        }
+                        arg = flag_shift_args(&argc, &argv);
+                    } else {
+                        arg = equals;
                     }
-
-                    char *arg = equals != NULL ? equals : flag_shift_args(&argc, &argv);
 
                     c->flags[i].val.as_str = arg;
                 }
                 break;
 
                 case FLAG_UINT64: {
-                    if (equals == NULL && argc == 0) {
-                        c->flag_error = FLAG_ERROR_NO_VALUE;
-                        c->flag_error_name = flag;
-                        return false;
+                    char *arg;
+                    if (equals == NULL) {
+                        if (argc == 0) {
+                            c->flag_error = FLAG_ERROR_NO_VALUE;
+                            c->flag_error_name = flag;
+                            return false;
+                        }
+                        arg = flag_shift_args(&argc, &argv);
+                    } else {
+                        arg = equals;
                     }
-
-                    char *arg = equals != NULL ? equals : flag_shift_args(&argc, &argv);
 
                     static_assert(sizeof(unsigned long long int) == sizeof(uint64_t), "The original author designed this for x86_64 machine with the compiler that expects unsigned long long int and uint64_t to be the same thing, so they could use strtoull() function to parse it. Please adjust this code for your case and maybe even send the patch to upstream to make it work on a wider range of environments.");
                     char *endptr;
@@ -238,7 +246,7 @@ bool flag_parse(int argc, char **argv)
                         c->flag_error_name = flag;
                         return false;
                     }
-                    
+
                     if (result == ULLONG_MAX && errno == ERANGE) {
                         c->flag_error = FLAG_ERROR_INTEGER_OVERFLOW;
                         c->flag_error_name = flag;
@@ -250,13 +258,17 @@ bool flag_parse(int argc, char **argv)
                 break;
 
                 case FLAG_SIZE: {
-                    if (equals == NULL && argc == 0) {
-                        c->flag_error = FLAG_ERROR_NO_VALUE;
-                        c->flag_error_name = flag;
-                        return false;
+                    char *arg;
+                    if (equals == NULL) {
+                        if (argc == 0) {
+                            c->flag_error = FLAG_ERROR_NO_VALUE;
+                            c->flag_error_name = flag;
+                            return false;
+                        }
+                        arg = flag_shift_args(&argc, &argv);
+                    } else {
+                        arg = equals;
                     }
-
-                    char *arg = equals != NULL ? equals : flag_shift_args(&argc, &argv);
 
                     static_assert(sizeof(unsigned long long int) == sizeof(size_t), "The original author designed this for x86_64 machine with the compiler that expects unsigned long long int and size_t to be the same thing, so they could use strtoull() function to parse it. Please adjust this code for your case and maybe even send the patch to upstream to make it work on a wider range of environments.");
                     char *endptr;
