@@ -1,4 +1,4 @@
-// flag.h -- v1.4.0 -- command-line flag parsing
+// flag.h -- v1.4.1 -- command-line flag parsing
 //
 //   Inspired by Go's flag module: https://pkg.go.dev/flag
 //
@@ -582,6 +582,7 @@ void flag_c_print_options(void *c, FILE *stream)
                 fprintf(stream, "        Default: %s\n", flag->def.as_str);
             }
             break;
+        case COUNT_FLAG_TYPES:
         default:
             assert(0 && "unreachable");
             exit(69);
@@ -635,6 +636,7 @@ void flag_print_error(FILE *stream)
 /*
    Revision history:
 
+     1.4.1 (2025-09-05) Fix -Wswitch-enum warning for GCC/Clang
      1.4.0 (2025-07-23) Add support for explicit flag contexts
                         Add Flag_List_Mut
                         Implement `-key=value` syntax for flag lists
