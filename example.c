@@ -11,14 +11,36 @@ void usage(FILE *stream)
     flag_print_options(stream);
 }
 
+void print_list(const char **items, size_t count)
+{
+    printf("[");
+    for (size_t i = 0; i < count; ++i) {
+        if (i > 0) printf(", ");
+        printf("%s", items[i]);
+    }
+    printf("]\n");
+}
+
 int main(int argc, char **argv)
 {
-    bool      *help   = flag_bool("help", false, "Print this help to stdout and exit with 0");
-    bool      *Bool   = flag_bool("bool", false, "Boolean flag");
-    size_t    *size   = flag_size("size", 0, "Size flag");
-    uint64_t  *uint64 = flag_uint64("uint64", 0, "uint64 flag");
-    char     **str    = flag_str("str", "", "String flag");
-    Flag_List *list   = flag_list("list", "List flag");
+    bool      *help    = flag_bool("help", false, "Print this help to stdout and exit with 0");
+    bool      *Bool    = flag_bool("bool", false, "Boolean flag");
+    size_t    *size    = flag_size("size", 0, "Size flag");
+    uint64_t  *integer = flag_uint64("integer", 0, "integer flag");
+    char     **str     = flag_str("str", "", "String flag");
+    Flag_List *list    = flag_list("list", "List flag");
+
+    bool Bool2;
+    size_t size2;
+    uint64_t integer2;
+    char *str2;
+    Flag_List list2;
+
+    flag_bool_var(&Bool2, "bool2", false, "Boolean flag");
+    flag_size_var(&size2, "size2", 0, "Size flag");
+    flag_uint64_var(&integer2, "integer2", 0, "integer flag");
+    flag_str_var(&str2, "str2", "", "String flag");
+    flag_list_var(&list2, "list2", "List flag");
 
     if (!flag_parse(argc, argv)) {
         usage(stderr);
@@ -41,28 +63,32 @@ int main(int argc, char **argv)
     //   flags dynamic. Maybe we should just make it dynamic and finally expose the internal
     //   structure for good?
     int n, width = 0;
-    n = strlen(flag_name(Bool));   if (n > width) width = n;
-    n = strlen(flag_name(size));   if (n > width) width = n;
-    n = strlen(flag_name(uint64)); if (n > width) width = n;
-    n = strlen(flag_name(str));    if (n > width) width = n;
-    n = strlen(flag_name(list));   if (n > width) width = n;
-    n = strlen("args");            if (n > width) width = n;
+    n = strlen(flag_name(Bool));      if (n > width) width = n;
+    n = strlen(flag_name(size));      if (n > width) width = n;
+    n = strlen(flag_name(integer));   if (n > width) width = n;
+    n = strlen(flag_name(str));       if (n > width) width = n;
+    n = strlen(flag_name(list));      if (n > width) width = n;
+    n = strlen(flag_name(&Bool2));    if (n > width) width = n;
+    n = strlen(flag_name(&size2));    if (n > width) width = n;
+    n = strlen(flag_name(&integer2)); if (n > width) width = n;
+    n = strlen(flag_name(&str2));     if (n > width) width = n;
+    n = strlen(flag_name(&list2));    if (n > width) width = n;
+    n = strlen("args");               if (n > width) width = n;
 
     printf("-%-*s => %s\n",          width, flag_name(Bool),   *Bool ? "true" : "false");
     printf("-%-*s => %zu\n",         width, flag_name(size),   *size);
-    printf("-%-*s => %" PRIu64 "\n", width, flag_name(uint64), *uint64);
+    printf("-%-*s => %" PRIu64 "\n", width, flag_name(integer), *integer);
     printf("-%-*s => %s\n",          width, flag_name(str),    *str);
-    printf("-%-*s => [",             width, flag_name(list));
-    for (size_t i = 0; i < list->count; ++i) {
-        if (i > 0) printf(", ");
-        printf("%s", list->items[i]);
-    }
-    printf("]\n");
-    printf("%-*s  => [", width, "args");
-    for (int i = 0; i < argc; ++i){
-        if (i > 0) printf(", ");
-        printf("%s", argv[i]);
-    }
-    printf("]\n");
+    printf("-%-*s => ",              width, flag_name(list));
+    print_list(list->items, list->count);
+    printf("-%-*s => %s\n",          width, flag_name(&Bool2),    Bool2 ? "true" : "false");
+    printf("-%-*s => %zu\n",         width, flag_name(&size2),    size2);
+    printf("-%-*s => %" PRIu64 "\n", width, flag_name(&integer2), integer2);
+    printf("-%-*s => %s\n",          width, flag_name(&str2),     str2);
+    printf("-%-*s => ",              width, flag_name(&list2));
+    print_list(list2.items, list2.count);
+
+    printf("%-*s  => ", width, "args");
+    print_list((const char **)argv, argc);
     return 0;
 }

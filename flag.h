@@ -1,4 +1,4 @@
-// flag.h -- v1.5.0 -- command-line flag parsing
+// flag.h -- v1.6.0 -- command-line flag parsing
 //
 //   Inspired by Go's flag module: https://pkg.go.dev/flag
 //
@@ -48,12 +48,6 @@
 #include <string.h>
 #include <errno.h>
 
-// TODO: *_var function variants
-// void flag_bool_var(bool *var, const char *name, bool def, const char *desc);
-// void flag_bool_uint64(uint64_t *var, const char *name, bool def, const char *desc);
-// etc.
-// WARNING! *_var functions may break the flag_name() functionality
-
 #ifndef FLAGS_CAP
 #define FLAGS_CAP 256
 #endif // FLAGS_CAP
@@ -93,12 +87,25 @@ typedef struct {
 /// API that operate on implicit global flag context
 
 char *flag_name(void *val);
+
 bool *flag_bool(const char *name, bool def, const char *desc);
+void flag_bool_var(bool *var, const char *name, bool def, const char *desc);
+
 uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc);
+void flag_uint64_var(uint64_t *var, const char *name, uint64_t def, const char *desc);
+
 size_t *flag_size(const char *name, uint64_t def, const char *desc);
+void flag_size_var(size_t *var, const char *name, uint64_t def, const char *desc);
+
 char **flag_str(const char *name, const char *def, const char *desc);
+void flag_str_var(char **var, const char *name, const char *def, const char *desc);
+
 Flag_List *flag_list(const char *name, const char *desc);
+void flag_list_var(Flag_List *var, const char *name, const char *desc);
+
 Flag_List_Mut *flag_list_mut(const char *name, const char *desc);
+void flag_list_mut_var(Flag_List_Mut *var, const char *name, const char *desc);
+
 bool flag_parse(int argc, char **argv);
 int flag_rest_argc(void);
 char **flag_rest_argv(void);
@@ -122,12 +129,25 @@ void flag_print_options(FILE *stream);
 void *flag_c_new(const char *program_name);
 void flag_c_free(void *c);
 char *flag_c_name(void *c, void *val);
+
 bool *flag_c_bool(void *c, const char *name, bool def, const char *desc);
+void flag_c_bool_var(void *c, bool *var, const char *name, bool def, const char *desc);
+
 uint64_t *flag_c_uint64(void *c, const char *name, uint64_t def, const char *desc);
+void flag_c_uint64_var(void *c, uint64_t *var, const char *name, uint64_t def, const char *desc);
+
 size_t *flag_c_size(void *c, const char *name, uint64_t def, const char *desc);
+void flag_c_size_var(void *c, size_t *var, const char *name, uint64_t def, const char *desc);
+
 char **flag_c_str(void *c, const char *name, const char *def, const char *desc);
+void flag_c_str_var(void *c, char **var, const char *name, const char *def, const char *desc);
+
 Flag_List *flag_c_list(void *c, const char *name, const char *desc);
+void flag_c_list_var(void *c, Flag_List *var, const char *name, const char *desc);
+
 Flag_List_Mut *flag_c_list_mut(void *c, const char *name, const char *desc);
+void flag_c_list_mut_var(void *c, Flag_List_Mut *var, const char *name, const char *desc);
+
 bool flag_c_parse(void *c, int argc, char **argv);
 int flag_c_rest_argc(void *c);
 char **flag_c_rest_argv(void *c);
@@ -175,7 +195,11 @@ typedef struct {
     Flag_Type type;
     char *name;
     char *desc;
+
     Flag_Value val;
+    bool use_ref;
+    void* ref;
+
     Flag_Value def;
 } Flag;
 
@@ -193,6 +217,7 @@ typedef struct {
 } Flag_Context;
 
 static Flag *flag__new_flag(Flag_Context *c, Flag_Type type, const char *name, const char *desc);
+static void *flag__get_ref(Flag *flag);
 
 static Flag_Context flag_global_context;
 
@@ -221,19 +246,35 @@ static Flag *flag__new_flag(Flag_Context *c, Flag_Type type, const char *name, c
     return flag;
 }
 
+static void *flag__get_ref(Flag *flag)
+{
+    if (flag->use_ref) {
+        return flag->ref;
+    } else {
+        return &flag->val;
+    }
+}
+
 char *flag_name(void *val)
 {
-    Flag *flag = (Flag*) ((char*) val - offsetof(Flag, val));
-    return flag->name;
+    return flag_c_name(&flag_global_context, val);
 }
 
 char *flag_c_name(void *c, void *val)
 {
-    (void)c;
-    // NOTE: right now internally there is no difference between flag_name(..) and flag_c_name(..)
-    // But we are separating them on the API level in case something changes. Especially if we are
-    // to implement the *_var function variants.
-    return flag_name(val);
+    Flag_Context *fc = (Flag_Context*)c;
+
+    for (size_t i = 0; i < fc->flags_count; ++i) {
+        Flag *flag = &fc->flags[i];
+
+        if (flag->use_ref) {
+            if (flag->ref == val)  return flag->name;
+        } else {
+            if (&flag->val == val) return flag->name;
+        }
+    }
+
+    return NULL;
 }
 
 bool *flag_c_bool(void *c, const char *name, bool def, const char *desc)
@@ -244,9 +285,23 @@ bool *flag_c_bool(void *c, const char *name, bool def, const char *desc)
     return &flag->val.as_bool;
 }
 
+void flag_c_bool_var(void *c, bool *var, const char *name, bool def, const char *desc)
+{
+    Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_BOOL, name, desc);
+    flag->use_ref = true;
+    flag->def.as_bool = def;
+    flag->ref = var;
+    *var = def;
+}
+
 bool *flag_bool(const char *name, bool def, const char *desc)
 {
     return flag_c_bool(&flag_global_context, name, def, desc);
+}
+
+void flag_bool_var(bool *var, const char *name, bool def, const char *desc)
+{
+    flag_c_bool_var(&flag_global_context, var, name, def, desc);
 }
 
 uint64_t *flag_c_uint64(void *c, const char *name, uint64_t def, const char *desc)
@@ -257,9 +312,23 @@ uint64_t *flag_c_uint64(void *c, const char *name, uint64_t def, const char *des
     return &flag->val.as_uint64;
 }
 
+void flag_c_uint64_var(void *c, uint64_t *var, const char *name, uint64_t def, const char *desc)
+{
+    Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_UINT64, name, desc);
+    flag->use_ref = true;
+    flag->def.as_uint64 = def;
+    flag->ref = var;
+    *var = def;
+}
+
 uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc)
 {
     return flag_c_uint64(&flag_global_context, name, def, desc);
+}
+
+void flag_uint64_var(uint64_t *var, const char *name, uint64_t def, const char *desc)
+{
+    flag_c_uint64_var(&flag_global_context, var, name, def, desc);
 }
 
 size_t *flag_c_size(void *c, const char *name, uint64_t def, const char *desc)
@@ -270,9 +339,23 @@ size_t *flag_c_size(void *c, const char *name, uint64_t def, const char *desc)
     return &flag->val.as_size;
 }
 
+void flag_c_size_var(void *c, size_t *var, const char *name, uint64_t def, const char *desc)
+{
+    Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_SIZE, name, desc);
+    flag->use_ref = var;
+    flag->ref = var;
+    flag->def.as_size = def;
+    *var = def;
+}
+
 size_t *flag_size(const char *name, uint64_t def, const char *desc)
 {
     return flag_c_size(&flag_global_context, name, def, desc);
+}
+
+void flag_size_var(size_t *var, const char *name, uint64_t def, const char *desc)
+{
+    flag_c_size_var(&flag_global_context, var, name, def, desc);
 }
 
 char **flag_c_str(void *c, const char *name, const char *def, const char *desc)
@@ -283,9 +366,23 @@ char **flag_c_str(void *c, const char *name, const char *def, const char *desc)
     return &flag->val.as_str;
 }
 
+void flag_c_str_var(void *c, char **var, const char *name, const char *def, const char *desc)
+{
+    Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_STR, name, desc);
+    flag->use_ref = true;
+    flag->ref = var;
+    flag->def.as_str = (char*) def;
+    *var = (char*)def; // NOTE: I won't touch it I promise Kappa
+}
+
 char **flag_str(const char *name, const char *def, const char *desc)
 {
     return flag_c_str(&flag_global_context, name, def, desc);
+}
+
+void flag_str_var(char **var, const char *name, const char *def, const char *desc)
+{
+    flag_c_str_var(&flag_global_context, var, name, def, desc);
 }
 
 Flag_List *flag_c_list(void *c, const char *name, const char *desc)
@@ -294,10 +391,24 @@ Flag_List *flag_c_list(void *c, const char *name, const char *desc)
     return &flag->val.as_list;
 }
 
+void flag_c_list_var(void *c, Flag_List *var, const char *name, const char *desc)
+{
+    Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_LIST, name, desc);
+    flag->use_ref = true;
+    flag->ref = var;
+}
+
 Flag_List_Mut *flag_c_list_mut(void *c, const char *name, const char *desc)
 {
     Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_LIST_MUT, name, desc);
     return &flag->val.as_list_mut;
+}
+
+void flag_c_list_mut_var(void *c, Flag_List_Mut *var, const char *name, const char *desc)
+{
+    Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_LIST_MUT, name, desc);
+    flag->use_ref = true;
+    flag->ref = var;
 }
 
 Flag_List *flag_list(const char *name, const char *desc)
@@ -305,9 +416,19 @@ Flag_List *flag_list(const char *name, const char *desc)
     return flag_c_list(&flag_global_context, name, desc);
 }
 
+void flag_list_var(Flag_List *var, const char *name, const char *desc)
+{
+    flag_c_list_var(&flag_global_context, var, name, desc);
+}
+
 Flag_List_Mut *flag_list_mut(const char *name, const char *desc)
 {
     return flag_c_list_mut(&flag_global_context, name, desc);
+}
+
+void flag_list_mut_var(Flag_List_Mut *var, const char *name, const char *desc)
+{
+    flag_c_list_mut_var(&flag_global_context, var, name, desc);
 }
 
 static char *flag_shift_args(int *argc, char ***argv)
@@ -420,7 +541,10 @@ bool flag_c_parse(void *c, int argc, char **argv)
                         arg = equals;
                     }
 
-                    if (!ignore) flag_list_append(const char *, &fc->flags[i].val.as_list, arg);
+                    if (!ignore) {
+                        Flag_List *list = (Flag_List*)flag__get_ref(&fc->flags[i]);
+                        flag_list_append(const char *, list, arg);
+                    }
                 }
                 break;
 
@@ -437,7 +561,10 @@ bool flag_c_parse(void *c, int argc, char **argv)
                         arg = equals;
                     }
 
-                    if (!ignore) flag_list_append(char *, &fc->flags[i].val.as_list_mut, arg);
+                    if (!ignore) {
+                        Flag_List_Mut *list = (Flag_List_Mut*)flag__get_ref(&fc->flags[i]);
+                        flag_list_append(char *, list, arg);
+                    }
                 }
                 break;
 
@@ -445,7 +572,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
                     // TODO: when the -flag= syntax is used, the boolean should probably parse values such as
                     // "true", "false", "on", "off", etc. But I'm not sure how backward compatibile it is to
                     // introduce such syntax at this point...
-                    fc->flags[i].val.as_bool = true;
+                    if (!ignore) *(bool*)flag__get_ref(&fc->flags[i]) = true;
                 }
                 break;
 
@@ -462,7 +589,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
                         arg = equals;
                     }
 
-                    if (!ignore) fc->flags[i].val.as_str = arg;
+                    if (!ignore) *(char**)flag__get_ref(&fc->flags[i]) = arg;
                 }
                 break;
 
@@ -497,7 +624,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
                         return false;
                     }
 
-                    if (!ignore) fc->flags[i].val.as_uint64 = result;
+                    if (!ignore) *(uint64_t*)flag__get_ref(&fc->flags[i]) = result;
                 }
                 break;
 
@@ -545,7 +672,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
                         return false;
                     }
 
-                    if (!ignore) fc->flags[i].val.as_size = result;
+                    if (!ignore) *(size_t*)flag__get_ref(&fc->flags[i]) = result;
                 }
                 break;
 
@@ -668,6 +795,7 @@ void flag_print_error(FILE *stream)
 /*
    Revision history:
 
+     1.6.0 (2025-09-22) Introduce *_var variants of flag functions
      1.5.0 (2025-09-22) Introduce -/flag syntax for ignoring flags
      1.4.1 (2025-09-05) Fix -Wswitch-enum warning for GCC/Clang
      1.4.0 (2025-07-23) Add support for explicit flag contexts
