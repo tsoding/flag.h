@@ -42,7 +42,6 @@
 typedef int64_t fixedpoint_t;
 #define FP_NUM_BITS      (sizeof(fixedpoint_t) * 8)
 
-// 34 can be changed i just put that for now
 #define FP_INT_BITS      (34) 
 #define FP_FRAC_BITS     (FP_NUM_BITS - FP_INT_BITS)
 
@@ -108,6 +107,8 @@ void flag_print_options(FILE *stream);
 
 double fptod(fixedpoint_t fp);
 float fptof(fixedpoint_t fp);
+fixedpoint_t ftofp(float f);
+fixedpoint_t dtofp(double d);
 fixedpoint_t fp_from_parts(int64_t int_part, int64_t frac_part, int64_t frac_digits);
 
 /// API that operate on a custom opaque flag context.
@@ -204,14 +205,24 @@ static Flag *flag__new_flag(Flag_Context *c, Flag_Type type, const char *name, c
 
 static Flag_Context flag_global_context;
 
-double fptod(fixedpoint_t fp)
+inline double fptod(fixedpoint_t fp)
 {
     return (double)fp / FP_SCALE_FACTOR;
 }
 
-float fptof(fixedpoint_t fp)
+inline float fptof(fixedpoint_t fp)
 {
     return (float)fp / FP_SCALE_FACTOR;
+}
+
+inline fixedpoint_t ftofp(float f)
+{
+    return (fixedpoint_t)(f * FP_SCALE_FACTOR);
+}
+
+inline fixedpoint_t dtofp(double d)
+{
+    return (fixedpoint_t)(d * FP_SCALE_FACTOR);
 }
 
 fixedpoint_t fp_from_parts(int64_t int_part, int64_t frac_part, int64_t frac_digits) {
@@ -561,12 +572,14 @@ bool flag_c_parse(void *c, int argc, char **argv)
                     if (*endptr != '\0') {
                         fc->flag_error = FLAG_ERROR_INVALID_NUMBER;
                         fc->flag_error_name = flag;
+			fc->flag_error_value = arg;
                         return false;
                     }
 
                     if (result == ULLONG_MAX && errno == ERANGE) {
                         fc->flag_error = FLAG_ERROR_INTEGER_OVERFLOW;
                         fc->flag_error_name = flag;
+			fc->flag_error_value = arg;
                         return false;
                     }
 
@@ -590,16 +603,17 @@ bool flag_c_parse(void *c, int argc, char **argv)
                     char *endptr;
                     // TODO: replace strtoull with a custom solution
                     // That way we can get rid of the dependency on errno and static_assert
-                    fixedpoint_t fp;
                     int fp_frac = 0;
                     int fp_int = strtoull(arg, &endptr,10);
 
                     if (*endptr == '.') {
+			char* tmp = arg;
                         arg = endptr + 1;
                         fp_frac = strtoull(arg, &endptr,10);
                         if (*endptr != '\0') {
                             fc->flag_error = FLAG_ERROR_INVALID_NUMBER;
                             fc->flag_error_name = flag;
+			    fc->flag_error_value = tmp;
                             return false;
                         }
                     }
@@ -608,17 +622,18 @@ bool flag_c_parse(void *c, int argc, char **argv)
                         if (*endptr != '\0') {
                             fc->flag_error = FLAG_ERROR_INVALID_NUMBER;
                             fc->flag_error_name = flag;
+			    fc->flag_error_value = arg;
                             return false;
                         }
                     }
                     int digit_count = 0;
                     int tmp_frac = fp_frac;
-                    if (fp_frac < 0) fp_frac = -fp_frac;
-                    while (fp_frac > 0) {
-                        fp_frac /= 10;
+                    if (tmp_frac < 0) tmp_frac = -tmp_frac;
+                    while (tmp_frac > 0) {
+                        tmp_frac /= 10;
                         digit_count++;
                     }
-                    fc->flags[i].val.as_fp = fp_from_parts(fp_int,tmp_frac,digit_count);
+                    fc->flags[i].val.as_fp = fp_from_parts(fp_int,fp_frac,digit_count);
                 }break;
                 case FLAG_SIZE: {
                     char *arg;
@@ -650,6 +665,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
                     if (result == ULLONG_MAX && errno == ERANGE) {
                         fc->flag_error = FLAG_ERROR_INTEGER_OVERFLOW;
                         fc->flag_error_name = flag;
+                        fc->flag_error_value = arg;
                         return false;
                     }
 
@@ -759,9 +775,11 @@ void flag_c_print_error(void *c, FILE *stream)
         break;
     case FLAG_ERROR_INVALID_NUMBER:
         fprintf(stream, "ERROR: -%s: invalid number\n", fc->flag_error_name);
+	fprintf(stream, "    Got %s which is an invaild number",fc->flag_error_value);
         break;
     case FLAG_ERROR_INTEGER_OVERFLOW:
         fprintf(stream, "ERROR: -%s: integer overflow\n", fc->flag_error_name);
+	fprintf(stream, "    Got %s is higher than max int(%lld)",fc->flag_error_value,ULLONG_MAX);
         break;
     case FLAG_ERROR_INVALID_SIZE_SUFFIX:
         fprintf(stream, "ERROR: -%s: invalid size suffix\n", fc->flag_error_name);
