@@ -26,6 +26,9 @@ int main(int argc, char **argv)
         exit(1);
     }
 
+    argc = flag_rest_argc();
+    argv = flag_rest_argv();
+
     if (*help) {
         usage(stdout);
         exit(0);
@@ -43,6 +46,7 @@ int main(int argc, char **argv)
     n = strlen(flag_name(uint64)); if (n > width) width = n;
     n = strlen(flag_name(str));    if (n > width) width = n;
     n = strlen(flag_name(list));   if (n > width) width = n;
+    n = strlen("args");            if (n > width) width = n;
 
     printf("-%-*s => %s\n",          width, flag_name(Bool),   *Bool ? "true" : "false");
     printf("-%-*s => %zu\n",         width, flag_name(size),   *size);
@@ -52,6 +56,12 @@ int main(int argc, char **argv)
     for (size_t i = 0; i < list->count; ++i) {
         if (i > 0) printf(", ");
         printf("%s", list->items[i]);
+    }
+    printf("]\n");
+    printf("%-*s  => [", width, "args");
+    for (int i = 0; i < argc; ++i){
+        if (i > 0) printf(", ");
+        printf("%s", argv[i]);
     }
     printf("]\n");
     return 0;
