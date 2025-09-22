@@ -24,7 +24,6 @@
 #include <limits.h>
 #include <string.h>
 #include <errno.h>
-#include <float.h>
 
 // TODO: *_var function variants
 // void flag_bool_var(bool *var, const char *name, bool def, const char *desc);
@@ -39,6 +38,28 @@
 #ifndef FLAG_LIST_INIT_CAP
 #define FLAG_LIST_INIT_CAP 8
 #endif // FLAG_LIST_INIT_CAP
+
+typedef int64_t fixedpoint_t;
+#define FP_NUM_BITS      (sizeof(fixedpoint_t) * 8)
+
+// 34 can be changed i just put that for now
+#define FP_INT_BITS      (34) 
+#define FP_FRAC_BITS     (FP_NUM_BITS - FP_INT_BITS)
+
+#define FP_SCALE         (FP_FRAC_BITS)
+#define FP_SCALE_FACTOR  (1 << FP_SCALE)
+
+#define FP_INT_MASK      (((1 << FP_INT_BITS)-1) << FP_FRAC_BITS)
+#define FP_FRAC_MASK     ((1 << FP_FRAC_BITS) - 1)
+
+#define FP_FROM_INT(a)   (a << FP_SCALE)
+#define FP_VAL_0         0
+#define FP_VAL_HALF      (1 << (FP_FRAC_BITS - 1))
+#define FP_VAL_1         FP_FROM_INT(1)
+#define FP_VAL_NEG_1     FP_FROM_INT(-1)
+
+#define FP_SIGN_BIT(a)   ((a >> (FP_NUM_BITS - 1)) & 1)
+#define FP_SIGN(a)       (FP_SIGN_BIT(a) == 0 ? FP_VAL_1 : FP_VAL_NEG_1)
 
 // Works with both Flag_List and Flag_List_Mut
 #define flag_list_append(type, list, item)                                                         \
@@ -72,7 +93,7 @@ typedef struct {
 
 char *flag_name(void *val);
 bool *flag_bool(const char *name, bool def, const char *desc);
-double *flag_double(const char *name,double  def, const char *desc);
+fixedpoint_t *flag_fixedpoint(const char *name,fixedpoint_t def, const char *desc);
 uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc);
 size_t *flag_size(const char *name, uint64_t def, const char *desc);
 char **flag_str(const char *name, const char *def, const char *desc);
@@ -84,6 +105,10 @@ char **flag_rest_argv(void);
 const char *flag_program_name(void);
 void flag_print_error(FILE *stream);
 void flag_print_options(FILE *stream);
+
+double fptod(fixedpoint_t fp);
+float fptof(fixedpoint_t fp);
+fixedpoint_t fp_from_parts(int64_t int_part, int64_t frac_part, int64_t frac_digits);
 
 /// API that operate on a custom opaque flag context.
 
@@ -103,6 +128,7 @@ void flag_c_free(void *c);
 char *flag_c_name(void *c, void *val);
 bool *flag_c_bool(void *c, const char *name, bool def, const char *desc);
 uint64_t *flag_c_uint64(void *c, const char *name, uint64_t def, const char *desc);
+fixedpoint_t *flag_c_fixedpoint(void *c, const char *name,fixedpoint_t def, const char *desc);
 size_t *flag_c_size(void *c, const char *name, uint64_t def, const char *desc);
 char **flag_c_str(void *c, const char *name, const char *def, const char *desc);
 Flag_List *flag_c_list(void *c, const char *name, const char *desc);
@@ -123,7 +149,7 @@ void flag_c_print_options(void *c, FILE *stream);
 typedef enum {
     FLAG_BOOL = 0,
     FLAG_UINT64,
-    FLAG_DOUBLE,
+    FLAG_FIXEDPOINT,
     FLAG_SIZE,
     FLAG_STR,
     FLAG_LIST,
@@ -135,7 +161,7 @@ static_assert(COUNT_FLAG_TYPES == 7, "Exhaustive Flag_Value definition");
 typedef union {
     char *as_str;
     uint64_t as_uint64;
-    double as_double;
+    fixedpoint_t as_fp;
     bool as_bool;
     size_t as_size;
     Flag_List as_list;
@@ -148,7 +174,6 @@ typedef enum {
     FLAG_ERROR_NO_VALUE,
     FLAG_ERROR_INVALID_NUMBER,
     FLAG_ERROR_INTEGER_OVERFLOW,
-    FLAG_ERROR_DOUBLE_OVERFLOW,
     FLAG_ERROR_INVALID_SIZE_SUFFIX,
     COUNT_FLAG_ERRORS,
 } Flag_Error;
@@ -178,6 +203,23 @@ typedef struct {
 static Flag *flag__new_flag(Flag_Context *c, Flag_Type type, const char *name, const char *desc);
 
 static Flag_Context flag_global_context;
+
+double fptod(fixedpoint_t fp)
+{
+    return (double)fp / FP_SCALE_FACTOR;
+}
+
+float fptof(fixedpoint_t fp)
+{
+    return (float)fp / FP_SCALE_FACTOR;
+}
+
+fixedpoint_t fp_from_parts(int64_t int_part, int64_t frac_part, int64_t frac_digits) {
+    int32_t r = 1;
+    while (frac_digits-- > 0) r *= 10;
+    fixedpoint_t frac_fp = (fixedpoint_t)((frac_part << FP_FRAC_BITS) / r);
+    return (int_part << FP_FRAC_BITS) + frac_fp;
+}
 
 void *flag_c_new(const char *program_name)
 {
@@ -232,17 +274,17 @@ bool *flag_bool(const char *name, bool def, const char *desc)
     return flag_c_bool(&flag_global_context, name, def, desc);
 }
 
-double *flag_c_double(void *c, const char *name, double def, const char *desc)
+fixedpoint_t *flag_c_fixedpoint(void *c, const char *name,fixedpoint_t def, const char *desc)
 {
-    Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_DOUBLE, name, desc);
-    flag->def.as_double = def;
-    flag->val.as_double = def;
-    return &flag->val.as_double;
+    Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_FIXEDPOINT, name, desc);
+    flag->def.as_fp = def;
+    flag->val.as_fp = def;
+    return &flag->val.as_fp;
 }
 
-double *flag_double(const char *name,double  def, const char *desc)
+fixedpoint_t *flag_fixedpoint(const char *name,fixedpoint_t def, const char *desc)
 {
-    return flag_c_double(&flag_global_context, name, def, desc);
+    return flag_c_fixedpoint(&flag_global_context, name, def, desc);
 }
 
 uint64_t *flag_c_uint64(void *c, const char *name, uint64_t def, const char *desc)
@@ -532,7 +574,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
                 }
                 break;
 
-                case FLAG_DOUBLE: {
+                case FLAG_FIXEDPOINT: {
                     char *arg;
                     if (equals == NULL) {
                         if (argc == 0) {
@@ -544,27 +586,40 @@ bool flag_c_parse(void *c, int argc, char **argv)
                     } else {
                         arg = equals;
                     }
+                    static_assert(sizeof(unsigned long long int) == sizeof(uint64_t), "The original author designed this for x86_64 machine with the compiler that expects unsigned long long int and uint64_t to be the same thing, so they could use strtoull() function to parse it. Please adjust this code for your case and maybe even send the patch to upstream to make it work on a wider range of environments.");
                     char *endptr;
-                    // TODO: replace strtod with a custom solution
+                    // TODO: replace strtoull with a custom solution
                     // That way we can get rid of the dependency on errno and static_assert
-                    double result = strtod(arg, &endptr);
+                    fixedpoint_t fp;
+                    int fp_frac = 0;
+                    int fp_int = strtoull(arg, &endptr,10);
 
-                    if (*endptr != '\0') {
-                        fc->flag_error = FLAG_ERROR_INVALID_NUMBER;
-                        fc->flag_error_name = flag;
-                        return false;
+                    if (*endptr == '.') {
+                        arg = endptr + 1;
+                        fp_frac = strtoull(arg, &endptr,10);
+                        if (*endptr != '\0') {
+                            fc->flag_error = FLAG_ERROR_INVALID_NUMBER;
+                            fc->flag_error_name = flag;
+                            return false;
+                        }
                     }
-
-                    if (result == DBL_MAX && errno == ERANGE) {
-                        fc->flag_error = FLAG_ERROR_DOUBLE_OVERFLOW;
-                        fc->flag_error_name = flag;
-                        return false;
+                    else
+                    {
+                        if (*endptr != '\0') {
+                            fc->flag_error = FLAG_ERROR_INVALID_NUMBER;
+                            fc->flag_error_name = flag;
+                            return false;
+                        }
                     }
-
-                    fc->flags[i].val.as_double = result;
-                }
-                break;
-
+                    int digit_count = 0;
+                    int tmp_frac = fp_frac;
+                    if (fp_frac < 0) fp_frac = -fp_frac;
+                    while (fp_frac > 0) {
+                        fp_frac /= 10;
+                        digit_count++;
+                    }
+                    fc->flags[i].val.as_fp = fp_from_parts(fp_int,tmp_frac,digit_count);
+                }break;
                 case FLAG_SIZE: {
                     char *arg;
                     if (equals == NULL) {
@@ -656,10 +711,10 @@ void flag_c_print_options(void *c, FILE *stream)
             fprintf(stream, "        %s\n", flag->desc);
             fprintf(stream, "        Default: %" PRIu64 "\n", flag->def.as_uint64);
             break;
-        case FLAG_DOUBLE:
-            fprintf(stream, "    -%s <double>\n", flag->name);
+        case FLAG_FIXEDPOINT:
+            fprintf(stream, "    -%s <double/float>\n", flag->name);
             fprintf(stream, "        %s\n", flag->desc);
-            fprintf(stream, "        Default: %lf\n", flag->def.as_double);
+            fprintf(stream, "        Default: %lf\n",fptod(flag->def.as_fp));
             break;
         case FLAG_SIZE:
             fprintf(stream, "    -%s <int>\n", flag->name);
@@ -689,7 +744,7 @@ void flag_print_options(FILE *stream)
 void flag_c_print_error(void *c, FILE *stream)
 {
     Flag_Context *fc = (Flag_Context *)c;
-    static_assert(COUNT_FLAG_ERRORS == 7, "Exhaustive flag error printing");
+    static_assert(COUNT_FLAG_ERRORS == 6, "Exhaustive flag error printing");
     switch (fc->flag_error) {
     case FLAG_NO_ERROR:
         // NOTE: don't call flag_print_error() if flag_parse() didn't return false, okay? ._.
@@ -707,9 +762,6 @@ void flag_c_print_error(void *c, FILE *stream)
         break;
     case FLAG_ERROR_INTEGER_OVERFLOW:
         fprintf(stream, "ERROR: -%s: integer overflow\n", fc->flag_error_name);
-        break;
-    case FLAG_ERROR_DOUBLE_OVERFLOW:
-        fprintf(stream, "ERROR: -%s: double overflow\n", fc->flag_error_name);
         break;
     case FLAG_ERROR_INVALID_SIZE_SUFFIX:
         fprintf(stream, "ERROR: -%s: invalid size suffix\n", fc->flag_error_name);
