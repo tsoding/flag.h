@@ -572,14 +572,14 @@ bool flag_c_parse(void *c, int argc, char **argv)
                     if (*endptr != '\0') {
                         fc->flag_error = FLAG_ERROR_INVALID_NUMBER;
                         fc->flag_error_name = flag;
-			fc->flag_error_value = arg;
+                        fc->flag_error_value = arg;
                         return false;
                     }
 
                     if (result == ULLONG_MAX && errno == ERANGE) {
                         fc->flag_error = FLAG_ERROR_INTEGER_OVERFLOW;
                         fc->flag_error_name = flag;
-			fc->flag_error_value = arg;
+                        fc->flag_error_value = arg;
                         return false;
                     }
 
@@ -607,13 +607,13 @@ bool flag_c_parse(void *c, int argc, char **argv)
                     int fp_int = strtoull(arg, &endptr,10);
 
                     if (*endptr == '.') {
-			char* tmp = arg;
+                        char* tmp = arg;
                         arg = endptr + 1;
                         fp_frac = strtoull(arg, &endptr,10);
                         if (*endptr != '\0') {
                             fc->flag_error = FLAG_ERROR_INVALID_NUMBER;
                             fc->flag_error_name = flag;
-			    fc->flag_error_value = tmp;
+                            fc->flag_error_value = tmp;
                             return false;
                         }
                     }
@@ -622,7 +622,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
                         if (*endptr != '\0') {
                             fc->flag_error = FLAG_ERROR_INVALID_NUMBER;
                             fc->flag_error_name = flag;
-			    fc->flag_error_value = arg;
+                            fc->flag_error_value = arg;
                             return false;
                         }
                     }
@@ -775,11 +775,11 @@ void flag_c_print_error(void *c, FILE *stream)
         break;
     case FLAG_ERROR_INVALID_NUMBER:
         fprintf(stream, "ERROR: -%s: invalid number\n", fc->flag_error_name);
-	fprintf(stream, "    Got %s which is an invaild number",fc->flag_error_value);
+        fprintf(stream, "    Got %s which is an invaild number",fc->flag_error_value);
         break;
     case FLAG_ERROR_INTEGER_OVERFLOW:
         fprintf(stream, "ERROR: -%s: integer overflow\n", fc->flag_error_name);
-	fprintf(stream, "    Got %s is higher than max int(%lld)",fc->flag_error_value,ULLONG_MAX);
+        fprintf(stream, "    Got %s is higher than max int(%lld)",fc->flag_error_value,ULLONG_MAX);
         break;
     case FLAG_ERROR_INVALID_SIZE_SUFFIX:
         fprintf(stream, "ERROR: -%s: invalid size suffix\n", fc->flag_error_name);
