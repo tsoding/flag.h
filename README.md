@@ -2,7 +2,8 @@
 
 Inspired by Go's flag module: https://pkg.go.dev/flag
 
-**WARNING! The design of the library is not finished and may be a subject to change.**
+> [!WARNING]
+> The design of the library is not finished and may be a subject to change.
 
 ## Quick Start
 
