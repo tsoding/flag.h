@@ -6,17 +6,19 @@
 
 void usage(FILE *stream)
 {
-    fprintf(stream, "Usage: ./example [OPTIONS] [--] <OUTPUT FILES...>\n");
+    fprintf(stream, "Usage: ./example [OPTIONS] [--] [ARGS]\n");
     fprintf(stream, "OPTIONS:\n");
     flag_print_options(stream);
 }
 
 int main(int argc, char **argv)
 {
-    bool *help = flag_bool("help", false, "Print this help to stdout and exit with 0");
-    char **line = flag_str("line", "Hi!", "Line to output to the file");
-    size_t *count = flag_size("count", 64, "Amount of lines to generate");
-    Flag_List *extra = flag_list("L", "Extra lines to append to the end");
+    bool      *help   = flag_bool("help", false, "Print this help to stdout and exit with 0");
+    bool      *Bool   = flag_bool("bool", false, "Boolean flag");
+    size_t    *size   = flag_size("size", 0, "Size flag");
+    uint64_t  *uint64 = flag_uint64("uint64", 0, "uint64 flag");
+    char     **str    = flag_str("str", "", "String flag");
+    Flag_List *list   = flag_list("list", "List flag");
 
     if (!flag_parse(argc, argv)) {
         usage(stderr);
@@ -29,31 +31,28 @@ int main(int argc, char **argv)
         exit(0);
     }
 
-    int rest_argc = flag_rest_argc();
-    char **rest_argv = flag_rest_argv();
+    // TODO: Would be nice to have some sort of mechanism to inspect all the defined flags
+    //   Maybe just expose flag_global_context? But I'm afraid that this will make changing
+    //   its internal structure in a backward compatible way more difficult...
+    //   But the only reason we may want to change it right now is to make the array of the
+    //   flags dynamic. Maybe we should just make it dynamic and finally expose the internal
+    //   structure for good?
+    int n, width = 0;
+    n = strlen(flag_name(Bool));   if (n > width) width = n;
+    n = strlen(flag_name(size));   if (n > width) width = n;
+    n = strlen(flag_name(uint64)); if (n > width) width = n;
+    n = strlen(flag_name(str));    if (n > width) width = n;
+    n = strlen(flag_name(list));   if (n > width) width = n;
 
-    if (rest_argc <= 0) {
-        usage(stderr);
-        fprintf(stderr, "ERROR: no output files are provided\n");
-        exit(1);
+    printf("-%-*s => %s\n",          width, flag_name(Bool),   *Bool ? "true" : "false");
+    printf("-%-*s => %zu\n",         width, flag_name(size),   *size);
+    printf("-%-*s => %" PRIu64 "\n", width, flag_name(uint64), *uint64);
+    printf("-%-*s => %s\n",          width, flag_name(str),    *str);
+    printf("-%-*s => [",             width, flag_name(list));
+    for (size_t i = 0; i < list->count; ++i) {
+        if (i > 0) printf(", ");
+        printf("%s", list->items[i]);
     }
-
-    for (int i = 0; i < rest_argc; ++i) {
-        const char *file_path = rest_argv[i];
-        FILE *f = fopen(file_path, "w");
-        assert(f);
-
-        for (size_t i = 0; i < *count; ++i) {
-            fprintf(f, "%s\n", *line);
-        }
-        for (size_t i = 0; i < extra->count; ++i) {
-            fprintf(f, "%s\n", extra->items[i]);
-        }
-
-        fclose(f);
-
-        printf("Generated %" PRIu64 " lines in %s\n", *count + extra->count, file_path);
-    }
-
+    printf("]\n");
     return 0;
 }
