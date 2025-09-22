@@ -1,4 +1,4 @@
-// flag.h -- v1.6.0 -- command-line flag parsing
+// flag.h -- v1.6.1 -- command-line flag parsing
 //
 //   Inspired by Go's flag module: https://pkg.go.dev/flag
 //
@@ -11,7 +11,10 @@
 //   to know whether flag_parse() has stopped due to encountering "--" or due to
 //   encountering a non-flag. Ideally this should've been a default behavior,
 //   but it breaks backward compatibility. Hence it's a feature macro.
+//
 //   TODO: make FLAG_PUSH_DASH_DASH_BACK a default behavior on a major version upgrade.
+//   Or maybe even better just expose some sort of a flag that tells the user whether
+//   the dash-dash was encountered or not.
 //
 // # Ignoring Flags
 //
@@ -197,8 +200,7 @@ typedef struct {
     char *desc;
 
     Flag_Value val;
-    bool use_ref;
-    void* ref;
+    void *ref;
 
     Flag_Value def;
 } Flag;
@@ -248,11 +250,8 @@ static Flag *flag__new_flag(Flag_Context *c, Flag_Type type, const char *name, c
 
 static void *flag__get_ref(Flag *flag)
 {
-    if (flag->use_ref) {
-        return flag->ref;
-    } else {
-        return &flag->val;
-    }
+    if (flag->ref) return flag->ref;
+    return &flag->val;
 }
 
 char *flag_name(void *val)
@@ -266,11 +265,8 @@ char *flag_c_name(void *c, void *val)
 
     for (size_t i = 0; i < fc->flags_count; ++i) {
         Flag *flag = &fc->flags[i];
-
-        if (flag->use_ref) {
-            if (flag->ref == val)  return flag->name;
-        } else {
-            if (&flag->val == val) return flag->name;
+        if (flag__get_ref(flag) == val) {
+            return flag->name;
         }
     }
 
@@ -288,7 +284,6 @@ bool *flag_c_bool(void *c, const char *name, bool def, const char *desc)
 void flag_c_bool_var(void *c, bool *var, const char *name, bool def, const char *desc)
 {
     Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_BOOL, name, desc);
-    flag->use_ref = true;
     flag->def.as_bool = def;
     flag->ref = var;
     *var = def;
@@ -315,7 +310,6 @@ uint64_t *flag_c_uint64(void *c, const char *name, uint64_t def, const char *des
 void flag_c_uint64_var(void *c, uint64_t *var, const char *name, uint64_t def, const char *desc)
 {
     Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_UINT64, name, desc);
-    flag->use_ref = true;
     flag->def.as_uint64 = def;
     flag->ref = var;
     *var = def;
@@ -342,7 +336,6 @@ size_t *flag_c_size(void *c, const char *name, uint64_t def, const char *desc)
 void flag_c_size_var(void *c, size_t *var, const char *name, uint64_t def, const char *desc)
 {
     Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_SIZE, name, desc);
-    flag->use_ref = var;
     flag->ref = var;
     flag->def.as_size = def;
     *var = def;
@@ -369,10 +362,9 @@ char **flag_c_str(void *c, const char *name, const char *def, const char *desc)
 void flag_c_str_var(void *c, char **var, const char *name, const char *def, const char *desc)
 {
     Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_STR, name, desc);
-    flag->use_ref = true;
     flag->ref = var;
     flag->def.as_str = (char*) def;
-    *var = (char*)def; // NOTE: I won't touch it I promise Kappa
+    *var = (char*) def;
 }
 
 char **flag_str(const char *name, const char *def, const char *desc)
@@ -394,7 +386,6 @@ Flag_List *flag_c_list(void *c, const char *name, const char *desc)
 void flag_c_list_var(void *c, Flag_List *var, const char *name, const char *desc)
 {
     Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_LIST, name, desc);
-    flag->use_ref = true;
     flag->ref = var;
 }
 
@@ -407,7 +398,6 @@ Flag_List_Mut *flag_c_list_mut(void *c, const char *name, const char *desc)
 void flag_c_list_mut_var(void *c, Flag_List_Mut *var, const char *name, const char *desc)
 {
     Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_LIST_MUT, name, desc);
-    flag->use_ref = true;
     flag->ref = var;
 }
 
@@ -795,6 +785,7 @@ void flag_print_error(FILE *stream)
 /*
    Revision history:
 
+     1.6.1 (2025-09-23) Remove use_ref from Flag_Context
      1.6.0 (2025-09-22) Introduce *_var variants of flag functions
      1.5.0 (2025-09-22) Introduce -/flag syntax for ignoring flags
      1.4.1 (2025-09-05) Fix -Wswitch-enum warning for GCC/Clang
