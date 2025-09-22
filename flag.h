@@ -1,8 +1,9 @@
-// flag.h -- v1.4.1 -- command-line flag parsing
+// flag.h -- v1.5.0 -- command-line flag parsing
 //
 //   Inspired by Go's flag module: https://pkg.go.dev/flag
 //
-// Macros API:
+// # Macros API
+//
 // - FLAG_LIST_INIT_CAP - initial capacity of the Flag_List and Flag_List_Mut Dynamic Arrays.
 // - FLAGS_CAP - how many flags you can define within a single context.
 // - FLAG_PUSH_DASH_DASH_BACK - make flag_parse() retain "--" in the rest args
@@ -11,6 +12,28 @@
 //   encountering a non-flag. Ideally this should've been a default behavior,
 //   but it breaks backward compatibility. Hence it's a feature macro.
 //   TODO: make FLAG_PUSH_DASH_DASH_BACK a default behavior on a major version upgrade.
+//
+// # Ignoring Flags
+//
+//   Flag.h implements an experimental syntax for ignoring flags. Consider the following command line:
+//
+//   ```console
+//   $ ./command -arg1 value1 -arg2 -arg3 value3
+//   ```
+//
+//   It provides three arguments `-arg1 value1`, `-arg2`, and `-arg3 value3`. By putting a forward slash `/`
+//   after the dash `-` in front of the argument you tell flag.h to parse the argument as usual, check the
+//   syntax check the type, but treat it as it was never provided.
+//
+//   ```console
+//   $ ./command -/arg1 value1 -arg2 -arg3 value3
+//   ```
+//
+//   In the above example only `-arg2` and `-arg3 value3` are provided, while `-/arg1 value1` is parsed, but
+//   ignored.
+//
+//   This enables you to "comment out" certain arguments so you can reenable them later as you rerun the same
+//   command over and over again in the terminal by pressing Up and then Enter.
 #ifndef FLAG_H_
 #define FLAG_H_
 
@@ -365,6 +388,12 @@ bool flag_c_parse(void *c, int argc, char **argv)
         // NOTE: remove the dash
         flag += 1;
 
+        bool ignore = false;
+        if (*flag == '/') {
+            ignore = true;
+            flag += 1;
+        }
+
         char *equals = strchr(flag, '=');
         if (equals != NULL) {
             // trim off the '=' and the value from `flag`,
@@ -391,7 +420,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
                         arg = equals;
                     }
 
-                    flag_list_append(const char *, &fc->flags[i].val.as_list, arg);
+                    if (!ignore) flag_list_append(const char *, &fc->flags[i].val.as_list, arg);
                 }
                 break;
 
@@ -408,11 +437,14 @@ bool flag_c_parse(void *c, int argc, char **argv)
                         arg = equals;
                     }
 
-                    flag_list_append(char *, &fc->flags[i].val.as_list_mut, arg);
+                    if (!ignore) flag_list_append(char *, &fc->flags[i].val.as_list_mut, arg);
                 }
                 break;
 
                 case FLAG_BOOL: {
+                    // TODO: when the -flag= syntax is used, the boolean should probably parse values such as
+                    // "true", "false", "on", "off", etc. But I'm not sure how backward compatibile it is to
+                    // introduce such syntax at this point...
                     fc->flags[i].val.as_bool = true;
                 }
                 break;
@@ -430,7 +462,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
                         arg = equals;
                     }
 
-                    fc->flags[i].val.as_str = arg;
+                    if (!ignore) fc->flags[i].val.as_str = arg;
                 }
                 break;
 
@@ -465,7 +497,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
                         return false;
                     }
 
-                    fc->flags[i].val.as_uint64 = result;
+                    if (!ignore) fc->flags[i].val.as_uint64 = result;
                 }
                 break;
 
@@ -513,7 +545,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
                         return false;
                     }
 
-                    fc->flags[i].val.as_size = result;
+                    if (!ignore) fc->flags[i].val.as_size = result;
                 }
                 break;
 
@@ -636,6 +668,7 @@ void flag_print_error(FILE *stream)
 /*
    Revision history:
 
+     1.5.0 (2025-09-22) Introduce -/flag syntax for ignoring flags
      1.4.1 (2025-09-05) Fix -Wswitch-enum warning for GCC/Clang
      1.4.0 (2025-07-23) Add support for explicit flag contexts
                         Add Flag_List_Mut
