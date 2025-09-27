@@ -1,4 +1,4 @@
-// flag.h -- v1.6.1 -- command-line flag parsing
+// flag.h -- v1.7.0 -- command-line flag parsing
 //
 //   Inspired by Go's flag module: https://pkg.go.dev/flag
 //
@@ -50,6 +50,7 @@
 #include <limits.h>
 #include <string.h>
 #include <errno.h>
+#include <float.h>
 
 #ifndef FLAGS_CAP
 #define FLAGS_CAP 256
@@ -94,6 +95,12 @@ char *flag_name(void *val);
 bool *flag_bool(const char *name, bool def, const char *desc);
 void flag_bool_var(bool *var, const char *name, bool def, const char *desc);
 
+float *flag_float(const char *name, float def, const char *desc);
+void flag_float_var(float *var, const char *name, float def, const char *desc);
+
+double *flag_double(const char *name, double def, const char *desc);
+void flag_double_var(double *var, const char *name, double def, const char *desc);
+
 uint64_t *flag_uint64(const char *name, uint64_t def, const char *desc);
 void flag_uint64_var(uint64_t *var, const char *name, uint64_t def, const char *desc);
 
@@ -136,6 +143,12 @@ char *flag_c_name(void *c, void *val);
 bool *flag_c_bool(void *c, const char *name, bool def, const char *desc);
 void flag_c_bool_var(void *c, bool *var, const char *name, bool def, const char *desc);
 
+float *flag_c_float(void *c, const char *name, float def, const char *desc);
+void flag_c_float_var(void *c, float *var, const char *name, float def, const char *desc);
+
+double *flag_c_double(void *c, const char *name, double def, const char *desc);
+void flag_c_double_var(void *c, double *var, const char *name, double def, const char *desc);
+
 uint64_t *flag_c_uint64(void *c, const char *name, uint64_t def, const char *desc);
 void flag_c_uint64_var(void *c, uint64_t *var, const char *name, uint64_t def, const char *desc);
 
@@ -167,6 +180,8 @@ void flag_c_print_options(void *c, FILE *stream);
 typedef enum {
     FLAG_BOOL = 0,
     FLAG_UINT64,
+    FLAG_DOUBLE,
+    FLAG_FLOAT,
     FLAG_SIZE,
     FLAG_STR,
     FLAG_LIST,
@@ -174,10 +189,12 @@ typedef enum {
     COUNT_FLAG_TYPES,
 } Flag_Type;
 
-static_assert(COUNT_FLAG_TYPES == 6, "Exhaustive Flag_Value definition");
+static_assert(COUNT_FLAG_TYPES == 8, "Exhaustive Flag_Value definition");
 typedef union {
     char *as_str;
     uint64_t as_uint64;
+    double as_double;
+    float as_float;
     bool as_bool;
     size_t as_size;
     Flag_List as_list;
@@ -190,6 +207,8 @@ typedef enum {
     FLAG_ERROR_NO_VALUE,
     FLAG_ERROR_INVALID_NUMBER,
     FLAG_ERROR_INTEGER_OVERFLOW,
+    FLAG_ERROR_FLOAT_OVERFLOW,
+    FLAG_ERROR_DOUBLE_OVERFLOW,
     FLAG_ERROR_INVALID_SIZE_SUFFIX,
     COUNT_FLAG_ERRORS,
 } Flag_Error;
@@ -211,6 +230,7 @@ typedef struct {
 
     Flag_Error flag_error;
     char *flag_error_name;
+    char *flag_error_value;
 
     const char *program_name;
 
@@ -218,8 +238,10 @@ typedef struct {
     char **rest_argv;
 } Flag_Context;
 
+// Forward declaration of private functions
 static Flag *flag__new_flag(Flag_Context *c, Flag_Type type, const char *name, const char *desc);
 static void *flag__get_ref(Flag *flag);
+static bool flag__size_calculate_multiplier(char* endptr, unsigned long long int* result);
 
 static Flag_Context flag_global_context;
 
@@ -297,6 +319,58 @@ bool *flag_bool(const char *name, bool def, const char *desc)
 void flag_bool_var(bool *var, const char *name, bool def, const char *desc)
 {
     flag_c_bool_var(&flag_global_context, var, name, def, desc);
+}
+
+float *flag_c_float(void *c, const char *name, float def, const char *desc)
+{
+    Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_FLOAT, name, desc);
+    flag->def.as_float = def;
+    flag->val.as_float = def;
+    return &flag->val.as_float;
+}
+
+void flag_c_float_var(void *c, float *var, const char *name, float def, const char *desc)
+{
+    Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_FLOAT, name, desc);
+    flag->def.as_float = def;
+    flag->ref = var;
+    *var = def;
+}
+
+double *flag_c_double(void *c, const char *name, double def, const char *desc)
+{
+    Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_DOUBLE, name, desc);
+    flag->def.as_double = def;
+    flag->val.as_double = def;
+    return &flag->val.as_double;
+}
+
+void flag_c_double_var(void *c, double *var, const char *name, double def, const char *desc)
+{
+    Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_DOUBLE, name, desc);
+    flag->def.as_double = def;
+    flag->ref = var;
+    *var = def;
+}
+
+float *flag_float(const char *name, float def, const char *desc)
+{
+    return flag_c_float(&flag_global_context, name, def, desc);
+}
+
+void flag_float_var(float *var, const char *name, float def, const char *desc)
+{
+    flag_c_float_var(&flag_global_context, var, name, def, desc);
+}
+
+double *flag_double(const char *name, double def, const char *desc)
+{
+    return flag_c_double(&flag_global_context, name, def, desc);
+}
+
+void flag_double_var(double *var, const char *name, double def, const char *desc)
+{
+    flag_c_double_var(&flag_global_context, var, name, def, desc);
 }
 
 uint64_t *flag_c_uint64(void *c, const char *name, uint64_t def, const char *desc)
@@ -465,6 +539,52 @@ void flag_c_set_program_name(void *c, const char *program_name)
     ((Flag_Context *)c)->program_name = program_name;
 }
 
+static bool flag__size_calculate_multiplier(char* endptr, unsigned long long int* result)
+{
+    if (strcmp(endptr, "c") == 0) {
+        (*result) *= 1ULL;
+    } else if (strcmp(endptr, "w") == 0) {
+        (*result) *= 2ULL;
+    } else if (strcmp(endptr, "b") == 0) {
+        (*result) *= 512ULL;
+    } else if (strcmp(endptr, "kB") == 0) {
+        (*result) *= 1000ULL;
+    } else if (strcmp(endptr, "K") == 0 || strcmp(endptr, "KiB") == 0) {
+        (*result) *= 1024ULL;
+    } else if (strcmp(endptr, "MB") == 0) {
+        (*result) *= 1000ULL * 1000ULL;
+    } else if (strcmp(endptr, "M") == 0 || strcmp(endptr, "MiB") == 0 || strcmp(endptr, "xM") == 0) {
+        (*result) *= 1024ULL * 1024ULL;
+    } else if (strcmp(endptr, "GB") == 0) {
+        (*result) *= 1000ULL * 1000ULL * 1000ULL;
+    } else if (strcmp(endptr, "G") == 0 || strcmp(endptr, "GiB") == 0) {
+        (*result) *= 1024ULL * 1024ULL * 1024ULL;
+    } else if (strcmp(endptr, "TB") == 0) {
+        (*result) *= 1000ULL * 1000ULL * 1000ULL * 1000ULL;
+    } else if (strcmp(endptr, "T") == 0 || strcmp(endptr, "TiB") == 0) {
+        (*result) *= 1024ULL * 1024ULL * 1024ULL * 1024ULL;
+    } else if (strcmp(endptr, "PB") == 0) {
+        (*result) *= 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL;
+    } else if (strcmp(endptr, "P") == 0 || strcmp(endptr, "PiB") == 0) {
+        (*result) *= 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL;
+    } else if (strcmp(endptr, "EB") == 0) {
+        (*result) *= 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL;
+    } else if (strcmp(endptr, "E") == 0 || strcmp(endptr, "EiB") == 0) {
+        (*result) *= 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL;
+    } else if (strcmp(endptr, "ZB") == 0) {
+        (*result) *= 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL;
+    } else if (strcmp(endptr, "Z") == 0 || strcmp(endptr, "ZiB") == 0) {
+        (*result) *= 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL;
+    } else if (strcmp(endptr, "YB") == 0) {
+        (*result) *= 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL;
+    } else if (strcmp(endptr, "Y") == 0 || strcmp(endptr, "YiB") == 0) {
+        (*result) *= 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL;
+    } else if (strcmp(endptr, "") != 0) {
+        return false;
+    }
+    return true;
+ }
+
 bool flag_c_parse(void *c, int argc, char **argv)
 {
     Flag_Context *fc = (Flag_Context*)c;
@@ -516,7 +636,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
         bool found = false;
         for (size_t i = 0; i < fc->flags_count; ++i) {
             if (strcmp(fc->flags[i].name, flag) == 0) {
-                static_assert(COUNT_FLAG_TYPES == 6, "Exhaustive flag type parsing");
+                static_assert(COUNT_FLAG_TYPES == 8, "Exhaustive flag type parsing");
                 switch (fc->flags[i].type) {
                 case FLAG_LIST: {
                     char *arg;
@@ -598,8 +718,6 @@ bool flag_c_parse(void *c, int argc, char **argv)
 
                     static_assert(sizeof(unsigned long long int) == sizeof(uint64_t), "The original author designed this for x86_64 machine with the compiler that expects unsigned long long int and uint64_t to be the same thing, so they could use strtoull() function to parse it. Please adjust this code for your case and maybe even send the patch to upstream to make it work on a wider range of environments.");
                     char *endptr;
-                    // TODO: replace strtoull with a custom solution
-                    // That way we can get rid of the dependency on errno and static_assert
                     unsigned long long int result = strtoull(arg, &endptr, 10);
 
                     if (*endptr != '\0') {
@@ -618,6 +736,68 @@ bool flag_c_parse(void *c, int argc, char **argv)
                 }
                 break;
 
+                case FLAG_FLOAT: {
+                    char *arg;
+                    if (equals == NULL) {
+                        if (argc == 0) {
+                            fc->flag_error = FLAG_ERROR_NO_VALUE;
+                            fc->flag_error_name = flag;
+                            return false;
+                        }
+                        arg = flag_shift_args(&argc, &argv);
+                    } else {
+                        arg = equals;
+                    }
+                    char *endptr;
+                    float result = strtof(arg, &endptr);
+
+                    if (*endptr != '\0') {
+                        fc->flag_error = FLAG_ERROR_INVALID_NUMBER;
+                        fc->flag_error_name = flag;
+                        return false;
+                    }
+
+                    if (result == FLT_MAX && errno == ERANGE) {
+                        fc->flag_error = FLAG_ERROR_FLOAT_OVERFLOW;
+                        fc->flag_error_name = flag;
+                        return false;
+                    }
+
+                    if (!ignore) *(float*)flag__get_ref(&fc->flags[i]) = result;
+                }
+                break;
+
+                case FLAG_DOUBLE: {
+                    char *arg;
+                    if (equals == NULL) {
+                        if (argc == 0) {
+                            fc->flag_error = FLAG_ERROR_NO_VALUE;
+                            fc->flag_error_name = flag;
+                            return false;
+                        }
+                        arg = flag_shift_args(&argc, &argv);
+                    } else {
+                        arg = equals;
+                    }
+                    char *endptr;
+                    double result = strtod(arg, &endptr);
+
+                    if (*endptr != '\0') {
+                        fc->flag_error = FLAG_ERROR_INVALID_NUMBER;
+                        fc->flag_error_name = flag;
+                        return false;
+                    }
+
+                    if (result == DBL_MAX && errno == ERANGE) {
+                        fc->flag_error = FLAG_ERROR_DOUBLE_OVERFLOW;
+                        fc->flag_error_name = flag;
+                        return false;
+                    }
+
+                    if (!ignore) *(double*)flag__get_ref(&fc->flags[i]) = result;
+                }
+                break;
+
                 case FLAG_SIZE: {
                     char *arg;
                     if (equals == NULL) {
@@ -633,26 +813,12 @@ bool flag_c_parse(void *c, int argc, char **argv)
 
                     static_assert(sizeof(unsigned long long int) == sizeof(size_t), "The original author designed this for x86_64 machine with the compiler that expects unsigned long long int and size_t to be the same thing, so they could use strtoull() function to parse it. Please adjust this code for your case and maybe even send the patch to upstream to make it work on a wider range of environments.");
                     char *endptr;
-                    // TODO: replace strtoull with a custom solution
-                    // That way we can get rid of the dependency on errno and static_assert
                     unsigned long long int result = strtoull(arg, &endptr, 10);
 
-                    // TODO: handle more multiplicative suffixes like in dd(1). From the dd(1) man page:
-                    // > N and BYTES may be followed by the following
-                    // > multiplicative suffixes: c =1, w =2, b =512, kB =1000, K
-                    // > =1024, MB =1000*1000, M =1024*1024, xM =M, GB
-                    // > =1000*1000*1000, G =1024*1024*1024, and so on for T, P,
-                    // > E, Z, Y.
-                    if (strcmp(endptr, "K") == 0) {
-                        result *= 1024;
-                    } else if (strcmp(endptr, "M") == 0) {
-                        result *= 1024*1024;
-                    } else if (strcmp(endptr, "G") == 0) {
-                        result *= 1024*1024*1024;
-                    } else if (strcmp(endptr, "") != 0) {
+                    if (!flag__size_calculate_multiplier(endptr,&result)) {
                         fc->flag_error = FLAG_ERROR_INVALID_SIZE_SUFFIX;
                         fc->flag_error_name = flag;
-                        // TODO: capability to report what exactly is the wrong suffix
+                        fc->flag_error_value = endptr;
                         return false;
                     }
 
@@ -680,6 +846,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
         if (!found) {
             fc->flag_error = FLAG_ERROR_UNKNOWN;
             fc->flag_error_name = flag;
+            fc->flag_error_value = flag;
             return false;
         }
     }
@@ -700,7 +867,7 @@ void flag_c_print_options(void *c, FILE *stream)
     for (size_t i = 0; i < fc->flags_count; ++i) {
         Flag *flag = &fc->flags[i];
 
-        static_assert(COUNT_FLAG_TYPES == 6, "Exhaustive flag type defaults printing");
+        static_assert(COUNT_FLAG_TYPES == 8, "Exhaustive flag type defaults printing");
         switch (fc->flags[i].type) {
         case FLAG_LIST_MUT:
         case FLAG_LIST:
@@ -718,6 +885,16 @@ void flag_c_print_options(void *c, FILE *stream)
             fprintf(stream, "    -%s <int>\n", flag->name);
             fprintf(stream, "        %s\n", flag->desc);
             fprintf(stream, "        Default: %" PRIu64 "\n", flag->def.as_uint64);
+            break;
+        case FLAG_FLOAT:
+            fprintf(stream, "    -%s <float>\n", flag->name);
+            fprintf(stream, "        %s\n", flag->desc);
+            fprintf(stream, "        Default: %f\n", flag->def.as_float);
+            break;
+        case FLAG_DOUBLE:
+            fprintf(stream, "    -%s <double>\n", flag->name);
+            fprintf(stream, "        %s\n", flag->desc);
+            fprintf(stream, "        Default: %lf\n", flag->def.as_double);
             break;
         case FLAG_SIZE:
             fprintf(stream, "    -%s <int>\n", flag->name);
@@ -747,7 +924,7 @@ void flag_print_options(FILE *stream)
 void flag_c_print_error(void *c, FILE *stream)
 {
     Flag_Context *fc = (Flag_Context *)c;
-    static_assert(COUNT_FLAG_ERRORS == 6, "Exhaustive flag error printing");
+    static_assert(COUNT_FLAG_ERRORS == 8, "Exhaustive flag error printing");
     switch (fc->flag_error) {
     case FLAG_NO_ERROR:
         // NOTE: don't call flag_print_error() if flag_parse() didn't return false, okay? ._.
@@ -755,6 +932,7 @@ void flag_c_print_error(void *c, FILE *stream)
         break;
     case FLAG_ERROR_UNKNOWN:
         fprintf(stream, "ERROR: -%s: unknown flag\n", fc->flag_error_name);
+        fprintf(stream,"    %s is not a valid flag\n",fc->flag_error_value);
         break;
     case FLAG_ERROR_NO_VALUE:
         fprintf(stream, "ERROR: -%s: no value provided\n", fc->flag_error_name);
@@ -765,8 +943,15 @@ void flag_c_print_error(void *c, FILE *stream)
     case FLAG_ERROR_INTEGER_OVERFLOW:
         fprintf(stream, "ERROR: -%s: integer overflow\n", fc->flag_error_name);
         break;
+    case FLAG_ERROR_FLOAT_OVERFLOW:
+        fprintf(stream, "ERROR: -%s: float overflow\n", fc->flag_error_name);
+        break;
+    case FLAG_ERROR_DOUBLE_OVERFLOW:
+        fprintf(stream, "ERROR: -%s: double overflow\n", fc->flag_error_name);
+        break;
     case FLAG_ERROR_INVALID_SIZE_SUFFIX:
         fprintf(stream, "ERROR: -%s: invalid size suffix\n", fc->flag_error_name);
+        fprintf(stream, "    Got %s suffix which is not expected\n", fc->flag_error_value);
         break;
     case COUNT_FLAG_ERRORS:
     default:
@@ -785,6 +970,8 @@ void flag_print_error(FILE *stream)
 /*
    Revision history:
 
+     1.7.0 (2025-09-27) Add float and double flags (by @ByXeno)
+                        Add more size suffixes (by @ByXeno)
      1.6.1 (2025-09-23) Remove use_ref from Flag_Context
      1.6.0 (2025-09-22) Introduce *_var variants of flag functions
      1.5.0 (2025-09-22) Introduce -/flag syntax for ignoring flags
