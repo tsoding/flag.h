@@ -1,12 +1,12 @@
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #define FLAG_IMPLEMENTATION
 #include "./flag.h"
 
-void usage(FILE *stream)
+void usage(FILE *const stream, const char *const program_name)
 {
-    fprintf(stream, "Usage: ./example [OPTIONS] [--] [ARGS]\n");
+    fprintf(stream, "Usage: %s [OPTIONS] [--] [ARGS]\n", program_name);
     fprintf(stream, "OPTIONS:\n");
     flag_print_options(stream);
 }
@@ -21,45 +21,45 @@ void print_list(const char **items, size_t count)
     printf("]\n");
 }
 
-int main(int argc, char **argv)
+int main(int argc, const char **argv)
 {
-    bool      *help    = flag_bool("help", false, "Print this help to stdout and exit with 0");
-    bool      *Bool    = flag_bool("bool", false, "Boolean flag");
-    float     *Float   = flag_float("float", 0.0f, "Float flag");
-    double    *Double  = flag_double("double", 0.0f, "double flag");
-    size_t    *size    = flag_size("size", 0, "Size flag");
-    uint64_t  *integer = flag_uint64("integer", 0, "integer flag");
-    char     **str     = flag_str("str", "", "String flag");
-    Flag_List *list    = flag_list("list", "List flag");
+    bool        *help    = flag_bool("help", false, "Print this help to stdout and exit with 0");
+    bool        *Bool    = flag_bool("bool", false, "Boolean flag");
+    float       *Float   = flag_float("float", 0.0f, "Float flag");
+    double      *Double  = flag_double("double", 0.0, "double flag");
+    size_t      *size    = flag_size("size", 0, "Size flag");
+    uint64_t    *integer = flag_uint64("integer", 0, "integer flag");
+    const char **str     = flag_str("str", "", "String flag");
+    Flag_List   *list    = flag_list("list", "List flag");
 
-    bool Bool2;
-    float Float2;
-    double Double2;
-    size_t size2;
-    uint64_t integer2;
-    char *str2;
-    Flag_List list2;
+    bool        Bool2;
+    float       Float2;
+    double      Double2;
+    size_t      size2;
+    uint64_t    integer2;
+    const char *str2;
+    Flag_List   list2 = {NULL, 0, 0};
 
     flag_bool_var(&Bool2, "bool2", false, "Boolean flag");
-    flag_float_var(&Float2, "float2", false, "Float flag");
-    flag_double_var(&Double2, "double2", false, "Double flag");
+    flag_float_var(&Float2, "float2", 0.0f, "Float flag");
+    flag_double_var(&Double2, "double2", 0.0, "Double flag");
     flag_size_var(&size2, "size2", 0, "Size flag");
     flag_uint64_var(&integer2, "integer2", 0, "integer flag");
     flag_str_var(&str2, "str2", "", "String flag");
     flag_list_var(&list2, "list2", "List flag");
 
     if (!flag_parse(argc, argv)) {
-        usage(stderr);
+        usage(stderr, flag_program_name());
         flag_print_error(stderr);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     argc = flag_rest_argc();
     argv = flag_rest_argv();
 
     if (*help) {
-        usage(stdout);
-        exit(0);
+        usage(stderr, flag_program_name());
+        exit(EXIT_SUCCESS);
     }
 
     // TODO: Would be nice to have some sort of mechanism to inspect all the defined flags
@@ -103,6 +103,6 @@ int main(int argc, char **argv)
     print_list(list2.items, list2.count);
 
     printf("%-*s  => ", width, "args");
-    print_list((const char **)argv, argc);
-    return 0;
+    print_list(argv, argc);
+    return EXIT_SUCCESS;
 }

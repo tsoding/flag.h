@@ -78,6 +78,7 @@ typedef struct {
     size_t capacity;
 } Flag_List;
 
+/*
 // The only reason Flag_List_Mut exists is to enable recursive usage of flag[_c]_parse(..) in a backward compatible manner.
 // That is using flag[_c]_parse(..) on Flag_List_Mut-s acquired from other flag[_c]_parse(..) calls, since argv must be mutable
 // to enable -flag=value syntax.
@@ -87,10 +88,11 @@ typedef struct {
     size_t count;
     size_t capacity;
 } Flag_List_Mut;
+*/
 
 /// API that operate on implicit global flag context
 
-char *flag_name(void *val);
+const char *flag_name(void *val);
 
 bool *flag_bool(const char *name, bool def, const char *desc);
 void flag_bool_var(bool *var, const char *name, bool def, const char *desc);
@@ -107,18 +109,20 @@ void flag_uint64_var(uint64_t *var, const char *name, uint64_t def, const char *
 size_t *flag_size(const char *name, uint64_t def, const char *desc);
 void flag_size_var(size_t *var, const char *name, uint64_t def, const char *desc);
 
-char **flag_str(const char *name, const char *def, const char *desc);
-void flag_str_var(char **var, const char *name, const char *def, const char *desc);
+const char **flag_str(const char *name, const char *def, const char *desc);
+void flag_str_var(const char **var, const char *name, const char *def, const char *desc);
 
 Flag_List *flag_list(const char *name, const char *desc);
 void flag_list_var(Flag_List *var, const char *name, const char *desc);
 
+/*
 Flag_List_Mut *flag_list_mut(const char *name, const char *desc);
 void flag_list_mut_var(Flag_List_Mut *var, const char *name, const char *desc);
+*/
 
-bool flag_parse(int argc, char **argv);
+bool flag_parse(int argc, const char **argv);
 int flag_rest_argc(void);
-char **flag_rest_argv(void);
+const char **flag_rest_argv(void);
 const char *flag_program_name(void);
 void flag_print_error(FILE *stream);
 void flag_print_options(FILE *stream);
@@ -138,7 +142,7 @@ void flag_print_options(FILE *stream);
 // `program_name` to the name of the corresponding subcommand.
 void *flag_c_new(const char *program_name);
 void flag_c_free(void *c);
-char *flag_c_name(void *c, void *val);
+const char *flag_c_name(void *c, void *val);
 
 bool *flag_c_bool(void *c, const char *name, bool def, const char *desc);
 void flag_c_bool_var(void *c, bool *var, const char *name, bool def, const char *desc);
@@ -155,18 +159,20 @@ void flag_c_uint64_var(void *c, uint64_t *var, const char *name, uint64_t def, c
 size_t *flag_c_size(void *c, const char *name, uint64_t def, const char *desc);
 void flag_c_size_var(void *c, size_t *var, const char *name, uint64_t def, const char *desc);
 
-char **flag_c_str(void *c, const char *name, const char *def, const char *desc);
-void flag_c_str_var(void *c, char **var, const char *name, const char *def, const char *desc);
+const char **flag_c_str(void *c, const char *name, const char *def, const char *desc);
+void flag_c_str_var(void *c, const char **var, const char *name, const char *def, const char *desc);
 
 Flag_List *flag_c_list(void *c, const char *name, const char *desc);
 void flag_c_list_var(void *c, Flag_List *var, const char *name, const char *desc);
 
+/*
 Flag_List_Mut *flag_c_list_mut(void *c, const char *name, const char *desc);
 void flag_c_list_mut_var(void *c, Flag_List_Mut *var, const char *name, const char *desc);
+*/
 
-bool flag_c_parse(void *c, int argc, char **argv);
+bool flag_c_parse(void *c, int argc, const char **argv);
 int flag_c_rest_argc(void *c);
-char **flag_c_rest_argv(void *c);
+const char **flag_c_rest_argv(void *c);
 const char *flag_c_program_name(void *c);
 void flag_c_print_error(void *c, FILE *stream);
 void flag_c_print_options(void *c, FILE *stream);
@@ -185,20 +191,20 @@ typedef enum {
     FLAG_SIZE,
     FLAG_STR,
     FLAG_LIST,
-    FLAG_LIST_MUT,
+    // FLAG_LIST_MUT,
     COUNT_FLAG_TYPES,
 } Flag_Type;
 
-static_assert(COUNT_FLAG_TYPES == 8, "Exhaustive Flag_Value definition");
+static_assert(COUNT_FLAG_TYPES == 7, "Exhaustive Flag_Value definition");
 typedef union {
-    char *as_str;
+    const char *as_str;
     uint64_t as_uint64;
     double as_double;
     float as_float;
     bool as_bool;
     size_t as_size;
     Flag_List as_list;
-    Flag_List_Mut as_list_mut;
+    // Flag_List_Mut as_list_mut;
 } Flag_Value;
 
 typedef enum {
@@ -215,8 +221,9 @@ typedef enum {
 
 typedef struct {
     Flag_Type type;
-    char *name;
-    char *desc;
+    size_t name_len;
+    const char *name;
+    const char *desc;
 
     Flag_Value val;
     void *ref;
@@ -229,19 +236,19 @@ typedef struct {
     size_t flags_count;
 
     Flag_Error flag_error;
-    char *flag_error_name;
-    char *flag_error_value;
+    const char *flag_error_name;
+    const char *flag_error_value;
 
     const char *program_name;
 
     int rest_argc;
-    char **rest_argv;
+    const char **rest_argv;
 } Flag_Context;
 
 // Forward declaration of private functions
 static Flag *flag__new_flag(Flag_Context *c, Flag_Type type, const char *name, const char *desc);
 static void *flag__get_ref(Flag *flag);
-static bool flag__size_calculate_multiplier(char* endptr, unsigned long long int* result);
+static bool flag__size_calculate_multiplier(const char *endptr, unsigned long long int *result);
 
 static Flag_Context flag_global_context;
 
@@ -264,9 +271,9 @@ static Flag *flag__new_flag(Flag_Context *c, Flag_Type type, const char *name, c
     Flag *flag = &c->flags[c->flags_count++];
     memset(flag, 0, sizeof(*flag));
     flag->type = type;
-    // NOTE: I won't touch them I promise Kappa
-    flag->name = (char*) name;
-    flag->desc = (char*) desc;
+    flag->name_len = strlen(name);
+    flag->name = name;
+    flag->desc = desc;
     return flag;
 }
 
@@ -276,12 +283,12 @@ static void *flag__get_ref(Flag *flag)
     return &flag->val;
 }
 
-char *flag_name(void *val)
+const char *flag_name(void *val)
 {
     return flag_c_name(&flag_global_context, val);
 }
 
-char *flag_c_name(void *c, void *val)
+const char *flag_c_name(void *c, void *val)
 {
     Flag_Context *fc = (Flag_Context*)c;
 
@@ -425,28 +432,28 @@ void flag_size_var(size_t *var, const char *name, uint64_t def, const char *desc
     flag_c_size_var(&flag_global_context, var, name, def, desc);
 }
 
-char **flag_c_str(void *c, const char *name, const char *def, const char *desc)
+const char **flag_c_str(void *c, const char *name, const char *def, const char *desc)
 {
     Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_STR, name, desc);
-    flag->val.as_str = (char*) def;
-    flag->def.as_str = (char*) def;
+    flag->val.as_str = def;
+    flag->def.as_str = def;
     return &flag->val.as_str;
 }
 
-void flag_c_str_var(void *c, char **var, const char *name, const char *def, const char *desc)
+void flag_c_str_var(void *c, const char **var, const char *name, const char *def, const char *desc)
 {
     Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_STR, name, desc);
     flag->ref = var;
-    flag->def.as_str = (char*) def;
-    *var = (char*) def;
+    flag->def.as_str = def;
+    *var = def;
 }
 
-char **flag_str(const char *name, const char *def, const char *desc)
+const char **flag_str(const char *name, const char *def, const char *desc)
 {
     return flag_c_str(&flag_global_context, name, def, desc);
 }
 
-void flag_str_var(char **var, const char *name, const char *def, const char *desc)
+void flag_str_var(const char **var, const char *name, const char *def, const char *desc)
 {
     flag_c_str_var(&flag_global_context, var, name, def, desc);
 }
@@ -463,6 +470,7 @@ void flag_c_list_var(void *c, Flag_List *var, const char *name, const char *desc
     flag->ref = var;
 }
 
+/*
 Flag_List_Mut *flag_c_list_mut(void *c, const char *name, const char *desc)
 {
     Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_LIST_MUT, name, desc);
@@ -474,6 +482,7 @@ void flag_c_list_mut_var(void *c, Flag_List_Mut *var, const char *name, const ch
     Flag *flag = flag__new_flag((Flag_Context*)c, FLAG_LIST_MUT, name, desc);
     flag->ref = var;
 }
+*/
 
 Flag_List *flag_list(const char *name, const char *desc)
 {
@@ -485,6 +494,7 @@ void flag_list_var(Flag_List *var, const char *name, const char *desc)
     flag_c_list_var(&flag_global_context, var, name, desc);
 }
 
+/*
 Flag_List_Mut *flag_list_mut(const char *name, const char *desc)
 {
     return flag_c_list_mut(&flag_global_context, name, desc);
@@ -494,11 +504,12 @@ void flag_list_mut_var(Flag_List_Mut *var, const char *name, const char *desc)
 {
     flag_c_list_mut_var(&flag_global_context, var, name, desc);
 }
+*/
 
-static char *flag_shift_args(int *argc, char ***argv)
+static const char *flag_shift_args(int *argc, const char ***argv)
 {
     assert(*argc > 0);
-    char *result = **argv;
+    const char *result = **argv;
     *argv += 1;
     *argc -= 1;
     return result;
@@ -514,12 +525,12 @@ int flag_c_rest_argc(void *c)
     return ((Flag_Context*)c)->rest_argc;
 }
 
-char **flag_rest_argv(void)
+const char **flag_rest_argv(void)
 {
     return flag_global_context.rest_argv;
 }
 
-char **flag_c_rest_argv(void *c)
+const char **flag_c_rest_argv(void *c)
 {
     return ((Flag_Context*)c)->rest_argv;
 }
@@ -539,7 +550,7 @@ void flag_c_set_program_name(void *c, const char *program_name)
     ((Flag_Context *)c)->program_name = program_name;
 }
 
-static bool flag__size_calculate_multiplier(char* endptr, unsigned long long int* result)
+static bool flag__size_calculate_multiplier(const char *endptr, unsigned long long int *result)
 {
     if (strcmp(endptr, "c") == 0) {
         (*result) *= 1ULL;
@@ -585,7 +596,7 @@ static bool flag__size_calculate_multiplier(char* endptr, unsigned long long int
     return true;
  }
 
-bool flag_c_parse(void *c, int argc, char **argv)
+bool flag_c_parse(void *c, int argc, const char **argv)
 {
     Flag_Context *fc = (Flag_Context*)c;
 
@@ -594,7 +605,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
     }
 
     while (argc > 0) {
-        char *flag = flag_shift_args(&argc, &argv);
+        const char *flag = flag_shift_args(&argc, &argv);
 
         if (*flag != '-') {
             // NOTE: pushing flag back into args
@@ -625,25 +636,27 @@ bool flag_c_parse(void *c, int argc, char **argv)
             flag += 1;
         }
 
-        char *equals = strchr(flag, '=');
+        size_t flag_len;
+        const char *equals = strchr(flag, '=');
         if (equals != NULL) {
-            // trim off the '=' and the value from `flag`,
-            *equals = '\0';
-            // and make `equals` be a pointer to just the value
+            flag_len = equals - flag;
+            // make `equals` be a pointer to just the value
             equals += 1;
+        } else {
+            flag_len = strlen(flag);
         }
 
         bool found = false;
         for (size_t i = 0; i < fc->flags_count; ++i) {
-            if (strcmp(fc->flags[i].name, flag) == 0) {
-                static_assert(COUNT_FLAG_TYPES == 8, "Exhaustive flag type parsing");
+            if ((flag_len == fc->flags[i].name_len) && (strncmp(fc->flags[i].name, flag, flag_len) == 0)) {
+                static_assert(COUNT_FLAG_TYPES == 7, "Exhaustive flag type parsing");
                 switch (fc->flags[i].type) {
                 case FLAG_LIST: {
-                    char *arg;
+                    const char *arg;
                     if (equals == NULL) {
                         if (argc == 0) {
                             fc->flag_error = FLAG_ERROR_NO_VALUE;
-                            fc->flag_error_name = flag;
+                            fc->flag_error_name = fc->flags[i].name;
                             return false;
                         }
                         arg = flag_shift_args(&argc, &argv);
@@ -658,12 +671,13 @@ bool flag_c_parse(void *c, int argc, char **argv)
                 }
                 break;
 
+                /*
                 case FLAG_LIST_MUT: {
-                    char *arg;
+                    const char *arg;
                     if (equals == NULL) {
                         if (argc == 0) {
                             fc->flag_error = FLAG_ERROR_NO_VALUE;
-                            fc->flag_error_name = flag;
+                            fc->flag_error_name = fc->flags[i].name;
                             return false;
                         }
                         arg = flag_shift_args(&argc, &argv);
@@ -673,10 +687,11 @@ bool flag_c_parse(void *c, int argc, char **argv)
 
                     if (!ignore) {
                         Flag_List_Mut *list = (Flag_List_Mut*)flag__get_ref(&fc->flags[i]);
-                        flag_list_append(char *, list, arg);
+                        flag_list_append(const char *, list, arg);
                     }
                 }
                 break;
+                */
 
                 case FLAG_BOOL: {
                     // TODO: when the -flag= syntax is used, the boolean should probably parse values such as
@@ -687,11 +702,11 @@ bool flag_c_parse(void *c, int argc, char **argv)
                 break;
 
                 case FLAG_STR: {
-                    char *arg;
+                    const char *arg;
                     if (equals == NULL) {
                         if (argc == 0) {
                             fc->flag_error = FLAG_ERROR_NO_VALUE;
-                            fc->flag_error_name = flag;
+                            fc->flag_error_name = fc->flags[i].name;
                             return false;
                         }
                         arg = flag_shift_args(&argc, &argv);
@@ -699,16 +714,16 @@ bool flag_c_parse(void *c, int argc, char **argv)
                         arg = equals;
                     }
 
-                    if (!ignore) *(char**)flag__get_ref(&fc->flags[i]) = arg;
+                    if (!ignore) *(const char**)flag__get_ref(&fc->flags[i]) = arg;
                 }
                 break;
 
                 case FLAG_UINT64: {
-                    char *arg;
+                    const char *arg;
                     if (equals == NULL) {
                         if (argc == 0) {
                             fc->flag_error = FLAG_ERROR_NO_VALUE;
-                            fc->flag_error_name = flag;
+                            fc->flag_error_name = fc->flags[i].name;
                             return false;
                         }
                         arg = flag_shift_args(&argc, &argv);
@@ -722,13 +737,13 @@ bool flag_c_parse(void *c, int argc, char **argv)
 
                     if (*endptr != '\0') {
                         fc->flag_error = FLAG_ERROR_INVALID_NUMBER;
-                        fc->flag_error_name = flag;
+                        fc->flag_error_name = fc->flags[i].name;
                         return false;
                     }
 
                     if (result == ULLONG_MAX && errno == ERANGE) {
                         fc->flag_error = FLAG_ERROR_INTEGER_OVERFLOW;
-                        fc->flag_error_name = flag;
+                        fc->flag_error_name = fc->flags[i].name;
                         return false;
                     }
 
@@ -737,11 +752,11 @@ bool flag_c_parse(void *c, int argc, char **argv)
                 break;
 
                 case FLAG_FLOAT: {
-                    char *arg;
+                    const char *arg;
                     if (equals == NULL) {
                         if (argc == 0) {
                             fc->flag_error = FLAG_ERROR_NO_VALUE;
-                            fc->flag_error_name = flag;
+                            fc->flag_error_name = fc->flags[i].name;
                             return false;
                         }
                         arg = flag_shift_args(&argc, &argv);
@@ -753,13 +768,13 @@ bool flag_c_parse(void *c, int argc, char **argv)
 
                     if (*endptr != '\0') {
                         fc->flag_error = FLAG_ERROR_INVALID_NUMBER;
-                        fc->flag_error_name = flag;
+                        fc->flag_error_name = fc->flags[i].name;
                         return false;
                     }
 
                     if (result == FLT_MAX && errno == ERANGE) {
                         fc->flag_error = FLAG_ERROR_FLOAT_OVERFLOW;
-                        fc->flag_error_name = flag;
+                        fc->flag_error_name = fc->flags[i].name;
                         return false;
                     }
 
@@ -768,11 +783,11 @@ bool flag_c_parse(void *c, int argc, char **argv)
                 break;
 
                 case FLAG_DOUBLE: {
-                    char *arg;
+                    const char *arg;
                     if (equals == NULL) {
                         if (argc == 0) {
                             fc->flag_error = FLAG_ERROR_NO_VALUE;
-                            fc->flag_error_name = flag;
+                            fc->flag_error_name = fc->flags[i].name;
                             return false;
                         }
                         arg = flag_shift_args(&argc, &argv);
@@ -784,13 +799,13 @@ bool flag_c_parse(void *c, int argc, char **argv)
 
                     if (*endptr != '\0') {
                         fc->flag_error = FLAG_ERROR_INVALID_NUMBER;
-                        fc->flag_error_name = flag;
+                        fc->flag_error_name = fc->flags[i].name;
                         return false;
                     }
 
                     if (result == DBL_MAX && errno == ERANGE) {
                         fc->flag_error = FLAG_ERROR_DOUBLE_OVERFLOW;
-                        fc->flag_error_name = flag;
+                        fc->flag_error_name = fc->flags[i].name;
                         return false;
                     }
 
@@ -799,11 +814,11 @@ bool flag_c_parse(void *c, int argc, char **argv)
                 break;
 
                 case FLAG_SIZE: {
-                    char *arg;
+                    const char *arg;
                     if (equals == NULL) {
                         if (argc == 0) {
                             fc->flag_error = FLAG_ERROR_NO_VALUE;
-                            fc->flag_error_name = flag;
+                            fc->flag_error_name = fc->flags[i].name;
                             return false;
                         }
                         arg = flag_shift_args(&argc, &argv);
@@ -815,16 +830,16 @@ bool flag_c_parse(void *c, int argc, char **argv)
                     char *endptr;
                     unsigned long long int result = strtoull(arg, &endptr, 10);
 
-                    if (!flag__size_calculate_multiplier(endptr,&result)) {
+                    if (!flag__size_calculate_multiplier(endptr, &result)) {
                         fc->flag_error = FLAG_ERROR_INVALID_SIZE_SUFFIX;
-                        fc->flag_error_name = flag;
+                        fc->flag_error_name = fc->flags[i].name;
                         fc->flag_error_value = endptr;
                         return false;
                     }
 
                     if (result == ULLONG_MAX && errno == ERANGE) {
                         fc->flag_error = FLAG_ERROR_INTEGER_OVERFLOW;
-                        fc->flag_error_name = flag;
+                        fc->flag_error_name = fc->flags[i].name;
                         return false;
                     }
 
@@ -833,10 +848,12 @@ bool flag_c_parse(void *c, int argc, char **argv)
                 break;
 
                 case COUNT_FLAG_TYPES:
+                    // fallthrough
                 default: {
                     assert(0 && "unreachable");
                     exit(69);
                 }
+                break;
                 }
 
                 found = true;
@@ -856,7 +873,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
     return true;
 }
 
-bool flag_parse(int argc, char **argv)
+bool flag_parse(int argc, const char **argv)
 {
     return flag_c_parse(&flag_global_context, argc, argv);
 }
@@ -867,9 +884,9 @@ void flag_c_print_options(void *c, FILE *stream)
     for (size_t i = 0; i < fc->flags_count; ++i) {
         Flag *flag = &fc->flags[i];
 
-        static_assert(COUNT_FLAG_TYPES == 8, "Exhaustive flag type defaults printing");
+        static_assert(COUNT_FLAG_TYPES == 7, "Exhaustive flag type defaults printing");
         switch (fc->flags[i].type) {
-        case FLAG_LIST_MUT:
+        // case FLAG_LIST_MUT:
         case FLAG_LIST:
             fprintf(stream, "    -%s <str> ... -%s <str> ...\n", flag->name, flag->name);
             fprintf(stream, "        %s\n", flag->desc);
@@ -932,7 +949,7 @@ void flag_c_print_error(void *c, FILE *stream)
         break;
     case FLAG_ERROR_UNKNOWN:
         fprintf(stream, "ERROR: -%s: unknown flag\n", fc->flag_error_name);
-        fprintf(stream,"    %s is not a valid flag\n",fc->flag_error_value);
+        fprintf(stream, "    %s is not a valid flag\n",fc->flag_error_value);
         break;
     case FLAG_ERROR_NO_VALUE:
         fprintf(stream, "ERROR: -%s: no value provided\n", fc->flag_error_name);
