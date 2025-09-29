@@ -32,13 +32,13 @@ int main(int argc, char **argv)
     char     **str     = flag_str("str", "", "String flag");
     Flag_List *list    = flag_list("list", "List flag");
 
-    bool Bool2;
-    float Float2;
-    double Double2;
-    size_t size2;
-    uint64_t integer2;
-    char *str2;
-    Flag_List list2;
+    bool Bool2 = false;
+    float Float2 = 0.0f;
+    double Double2 = 0.0;
+    size_t size2 = 0;
+    uint64_t integer2 = 0;
+    char *str2 = NULL;
+    Flag_List list2 = {0};
 
     flag_bool_var(&Bool2, "bool2", false, "Boolean flag");
     flag_float_var(&Float2, "float2", false, "Float flag");
