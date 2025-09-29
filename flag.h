@@ -541,46 +541,56 @@ void flag_c_set_program_name(void *c, const char *program_name)
 
 static bool flag__size_calculate_multiplier(char* endptr, unsigned long long int* result)
 {
+    unsigned long long multiplier;
+
     if (strcmp(endptr, "c") == 0) {
-        (*result) *= 1ULL;
+        multiplier = 1ULL;
     } else if (strcmp(endptr, "w") == 0) {
-        (*result) *= 2ULL;
+        multiplier = 2ULL;
     } else if (strcmp(endptr, "b") == 0) {
-        (*result) *= 512ULL;
+        multiplier = 512ULL;
     } else if (strcmp(endptr, "kB") == 0) {
-        (*result) *= 1000ULL;
+        multiplier = 1000ULL;
     } else if (strcmp(endptr, "K") == 0 || strcmp(endptr, "KiB") == 0) {
-        (*result) *= 1024ULL;
+        multiplier = 1024ULL;
     } else if (strcmp(endptr, "MB") == 0) {
-        (*result) *= 1000ULL * 1000ULL;
+        multiplier = 1000ULL * 1000ULL;
     } else if (strcmp(endptr, "M") == 0 || strcmp(endptr, "MiB") == 0 || strcmp(endptr, "xM") == 0) {
-        (*result) *= 1024ULL * 1024ULL;
+        multiplier = 1024ULL * 1024ULL;
     } else if (strcmp(endptr, "GB") == 0) {
-        (*result) *= 1000ULL * 1000ULL * 1000ULL;
+        multiplier = 1000ULL * 1000ULL * 1000ULL;
     } else if (strcmp(endptr, "G") == 0 || strcmp(endptr, "GiB") == 0) {
-        (*result) *= 1024ULL * 1024ULL * 1024ULL;
+        multiplier = 1024ULL * 1024ULL * 1024ULL;
     } else if (strcmp(endptr, "TB") == 0) {
-        (*result) *= 1000ULL * 1000ULL * 1000ULL * 1000ULL;
+        multiplier = 1000ULL * 1000ULL * 1000ULL * 1000ULL;
     } else if (strcmp(endptr, "T") == 0 || strcmp(endptr, "TiB") == 0) {
-        (*result) *= 1024ULL * 1024ULL * 1024ULL * 1024ULL;
+        multiplier = 1024ULL * 1024ULL * 1024ULL * 1024ULL;
     } else if (strcmp(endptr, "PB") == 0) {
-        (*result) *= 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL;
+        multiplier = 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL;
     } else if (strcmp(endptr, "P") == 0 || strcmp(endptr, "PiB") == 0) {
-        (*result) *= 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL;
+        multiplier = 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL;
     } else if (strcmp(endptr, "EB") == 0) {
-        (*result) *= 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL;
+        multiplier = 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL;
     } else if (strcmp(endptr, "E") == 0 || strcmp(endptr, "EiB") == 0) {
-        (*result) *= 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL;
+        multiplier = 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL;
     } else if (strcmp(endptr, "ZB") == 0) {
-        (*result) *= 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL;
+        multiplier = 0ULL;
     } else if (strcmp(endptr, "Z") == 0 || strcmp(endptr, "ZiB") == 0) {
-        (*result) *= 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL;
+        multiplier = 0ULL;
     } else if (strcmp(endptr, "YB") == 0) {
-        (*result) *= 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL * 1000ULL;
+        multiplier = 0ULL;
     } else if (strcmp(endptr, "Y") == 0 || strcmp(endptr, "YiB") == 0) {
-        (*result) *= 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL * 1024ULL;
+        multiplier = 0ULL;
     } else if (strcmp(endptr, "") != 0) {
         return false;
+    } else {
+        multiplier = 1ULL;
+    }
+    if (multiplier == 0ULL || ULLONG_MAX / multiplier < (*result)) {
+        (*result) = ULLONG_MAX;
+        errno = ERANGE;
+    } else {
+        (*result) *= multiplier;
     }
     return true;
  }
