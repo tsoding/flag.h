@@ -680,7 +680,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
 
                 case FLAG_BOOL: {
                     // TODO: when the -flag= syntax is used, the boolean should probably parse values such as
-                    // "true", "false", "on", "off", etc. But I'm not sure how backward compatibile it is to
+                    // "true", "false", "on", "off", etc. But I'm not sure how backward compatible it is to
                     // introduce such syntax at this point...
                     if (!ignore) *(bool*)flag__get_ref(&fc->flags[i]) = true;
                 }
