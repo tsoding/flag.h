@@ -1,5 +1,5 @@
 CFLAGS=-Wall -Wextra -std=c11 -pedantic -ggdb
-CXXFLAGS=-Wall -Wextra -std=c++17 -pedantic -ggdb
+CXXFLAGS=-Wall -Wextra -Wno-missing-field-initializers -std=c++17 -pedantic -ggdb
 
 .PHONY: all
 all: example-c example-cxx

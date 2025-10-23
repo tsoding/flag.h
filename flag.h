@@ -1,4 +1,4 @@
-// flag.h -- v1.7.0 -- command-line flag parsing
+// flag.h -- v1.7.1 -- command-line flag parsing
 //
 //   Inspired by Go's flag module: https://pkg.go.dev/flag
 //
@@ -230,7 +230,6 @@ typedef struct {
 
     Flag_Error flag_error;
     char *flag_error_name;
-    char *flag_error_value;
 
     const char *program_name;
 
@@ -818,7 +817,6 @@ bool flag_c_parse(void *c, int argc, char **argv)
                     if (!flag__size_calculate_multiplier(endptr,&result)) {
                         fc->flag_error = FLAG_ERROR_INVALID_SIZE_SUFFIX;
                         fc->flag_error_name = flag;
-                        fc->flag_error_value = endptr;
                         return false;
                     }
 
@@ -846,7 +844,6 @@ bool flag_c_parse(void *c, int argc, char **argv)
         if (!found) {
             fc->flag_error = FLAG_ERROR_UNKNOWN;
             fc->flag_error_name = flag;
-            fc->flag_error_value = flag;
             return false;
         }
     }
@@ -932,7 +929,6 @@ void flag_c_print_error(void *c, FILE *stream)
         break;
     case FLAG_ERROR_UNKNOWN:
         fprintf(stream, "ERROR: -%s: unknown flag\n", fc->flag_error_name);
-        fprintf(stream,"    %s is not a valid flag\n",fc->flag_error_value);
         break;
     case FLAG_ERROR_NO_VALUE:
         fprintf(stream, "ERROR: -%s: no value provided\n", fc->flag_error_name);
@@ -951,7 +947,6 @@ void flag_c_print_error(void *c, FILE *stream)
         break;
     case FLAG_ERROR_INVALID_SIZE_SUFFIX:
         fprintf(stream, "ERROR: -%s: invalid size suffix\n", fc->flag_error_name);
-        fprintf(stream, "    Got %s suffix which is not expected\n", fc->flag_error_value);
         break;
     case COUNT_FLAG_ERRORS:
     default:
@@ -970,6 +965,7 @@ void flag_print_error(FILE *stream)
 /*
    Revision history:
 
+     1.7.1 (2025-10-24) Remove flag_error_value from Flag_Context (@rexim)
      1.7.0 (2025-09-27) Add float and double flags (by @ByXeno)
                         Add more size suffixes (by @ByXeno)
      1.6.1 (2025-09-23) Remove use_ref from Flag_Context
