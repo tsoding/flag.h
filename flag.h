@@ -199,7 +199,7 @@ typedef enum {
     COUNT_FLAG_TYPES,
 } Flag_Type;
 
-FLAG_STATIC_ASSERT(COUNT_FLAG_TYPES == 8, flag_value_definition); // keep Flag_Value exhaustive
+FLAG_STATIC_ASSERT(COUNT_FLAG_TYPES == 8, flag_value_definition); // "Exhaustive Flag_Value definition"
 typedef union {
     char *as_str;
     uint64_t as_uint64;
@@ -645,7 +645,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
         bool found = false;
         for (size_t i = 0; i < fc->flags_count; ++i) {
             if (strcmp(fc->flags[i].name, flag) == 0) {
-                FLAG_STATIC_ASSERT(COUNT_FLAG_TYPES == 8, flag_type_parsing); // switch covers every Flag_Type
+                FLAG_STATIC_ASSERT(COUNT_FLAG_TYPES == 8, flag_type_parsing); // "Exhaustive flag type parsing"
                 switch (fc->flags[i].type) {
                 case FLAG_LIST: {
                     char *arg;
@@ -725,7 +725,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
                         arg = equals;
                     }
 
-                    FLAG_STATIC_ASSERT(sizeof(unsigned long long int) == sizeof(uint64_t), uint64_matches_ull); // rely on strtoull layout
+                    FLAG_STATIC_ASSERT(sizeof(unsigned long long int) == sizeof(uint64_t), uint64_matches_ull); // "The original author designed this for x86_64 machine with the compiler that expects unsigned long long int and uint64_t to be the same thing, so they could use strtoull() function to parse it. Please adjust this code for your case and maybe even send the patch to upstream to make it work on a wider range of environments."
                     char *endptr;
                     unsigned long long int result = strtoull(arg, &endptr, 10);
 
@@ -820,7 +820,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
                         arg = equals;
                     }
 
-                    FLAG_STATIC_ASSERT(sizeof(unsigned long long int) == sizeof(size_t), size_matches_ull); // rely on strtoull layout
+                    FLAG_STATIC_ASSERT(sizeof(unsigned long long int) == sizeof(size_t), size_matches_ull); // "The original author designed this for x86_64 machine with the compiler that expects unsigned long long int and size_t to be the same thing, so they could use strtoull() function to parse it. Please adjust this code for your case and maybe even send the patch to upstream to make it work on a wider range of environments."
                     char *endptr;
                     unsigned long long int result = strtoull(arg, &endptr, 10);
 
@@ -874,7 +874,7 @@ void flag_c_print_options(void *c, FILE *stream)
     for (size_t i = 0; i < fc->flags_count; ++i) {
         Flag *flag = &fc->flags[i];
 
-        FLAG_STATIC_ASSERT(COUNT_FLAG_TYPES == 8, flag_default_table); // exhaustive defaults
+        FLAG_STATIC_ASSERT(COUNT_FLAG_TYPES == 8, flag_default_table); // "Exhaustive flag type defaults printing"
         switch (fc->flags[i].type) {
         case FLAG_LIST_MUT:
         case FLAG_LIST:
@@ -931,7 +931,7 @@ void flag_print_options(FILE *stream)
 void flag_c_print_error(void *c, FILE *stream)
 {
     Flag_Context *fc = (Flag_Context *)c;
-    FLAG_STATIC_ASSERT(COUNT_FLAG_ERRORS == 8, flag_error_table); // error strings stay aligned
+    FLAG_STATIC_ASSERT(COUNT_FLAG_ERRORS == 8, flag_error_table); // "Exhaustive flag error printing"
     switch (fc->flag_error) {
     case FLAG_NO_ERROR:
         // NOTE: don't call flag_print_error() if flag_parse() didn't return false, okay? ._.
