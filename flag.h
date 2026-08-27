@@ -1,4 +1,4 @@
-// flag.h -- v1.7.1 -- command-line flag parsing
+// flag.h -- v1.8.0 -- command-line flag parsing
 //
 //   Inspired by Go's flag module: https://pkg.go.dev/flag
 //
@@ -51,6 +51,14 @@
 #include <string.h>
 #include <errno.h>
 #include <float.h>
+
+#ifndef flags_static_assert
+    #ifdef __cplusplus
+       #define flags_static_assert static_assert
+    #else
+       #define flags_static_assert _Static_assert
+    #endif
+#endif
 
 #ifndef FLAGS_CAP
 #define FLAGS_CAP 256
@@ -189,7 +197,7 @@ typedef enum {
     COUNT_FLAG_TYPES,
 } Flag_Type;
 
-static_assert(COUNT_FLAG_TYPES == 8, "Exhaustive Flag_Value definition");
+flags_static_assert(COUNT_FLAG_TYPES == 8, "Exhaustive Flag_Value definition");
 typedef union {
     char *as_str;
     uint64_t as_uint64;
@@ -635,7 +643,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
         bool found = false;
         for (size_t i = 0; i < fc->flags_count; ++i) {
             if (strcmp(fc->flags[i].name, flag) == 0) {
-                static_assert(COUNT_FLAG_TYPES == 8, "Exhaustive flag type parsing");
+                flags_static_assert(COUNT_FLAG_TYPES == 8, "Exhaustive flag type parsing");
                 switch (fc->flags[i].type) {
                 case FLAG_LIST: {
                     char *arg;
@@ -715,7 +723,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
                         arg = equals;
                     }
 
-                    static_assert(sizeof(unsigned long long int) == sizeof(uint64_t), "The original author designed this for x86_64 machine with the compiler that expects unsigned long long int and uint64_t to be the same thing, so they could use strtoull() function to parse it. Please adjust this code for your case and maybe even send the patch to upstream to make it work on a wider range of environments.");
+                    flags_static_assert(sizeof(unsigned long long int) == sizeof(uint64_t), "The original author designed this for x86_64 machine with the compiler that expects unsigned long long int and uint64_t to be the same thing, so they could use strtoull() function to parse it. Please adjust this code for your case and maybe even send the patch to upstream to make it work on a wider range of environments.");
                     char *endptr;
                     unsigned long long int result = strtoull(arg, &endptr, 10);
 
@@ -810,7 +818,7 @@ bool flag_c_parse(void *c, int argc, char **argv)
                         arg = equals;
                     }
 
-                    static_assert(sizeof(unsigned long long int) == sizeof(size_t), "The original author designed this for x86_64 machine with the compiler that expects unsigned long long int and size_t to be the same thing, so they could use strtoull() function to parse it. Please adjust this code for your case and maybe even send the patch to upstream to make it work on a wider range of environments.");
+                    flags_static_assert(sizeof(unsigned long long int) == sizeof(size_t), "The original author designed this for x86_64 machine with the compiler that expects unsigned long long int and size_t to be the same thing, so they could use strtoull() function to parse it. Please adjust this code for your case and maybe even send the patch to upstream to make it work on a wider range of environments.");
                     char *endptr;
                     unsigned long long int result = strtoull(arg, &endptr, 10);
 
@@ -864,7 +872,7 @@ void flag_c_print_options(void *c, FILE *stream)
     for (size_t i = 0; i < fc->flags_count; ++i) {
         Flag *flag = &fc->flags[i];
 
-        static_assert(COUNT_FLAG_TYPES == 8, "Exhaustive flag type defaults printing");
+        flags_static_assert(COUNT_FLAG_TYPES == 8, "Exhaustive flag type defaults printing");
         switch (fc->flags[i].type) {
         case FLAG_LIST_MUT:
         case FLAG_LIST:
@@ -921,7 +929,7 @@ void flag_print_options(FILE *stream)
 void flag_c_print_error(void *c, FILE *stream)
 {
     Flag_Context *fc = (Flag_Context *)c;
-    static_assert(COUNT_FLAG_ERRORS == 8, "Exhaustive flag error printing");
+    flags_static_assert(COUNT_FLAG_ERRORS == 8, "Exhaustive flag error printing");
     switch (fc->flag_error) {
     case FLAG_NO_ERROR:
         // NOTE: don't call flag_print_error() if flag_parse() didn't return false, okay? ._.
@@ -965,6 +973,7 @@ void flag_print_error(FILE *stream)
 /*
    Revision history:
 
+     1.8.0 (2026-08-28) Add flags_static_assert() to make it more compatible with C compilers that still support only _Static_assert like tcc (@rexim)
      1.7.1 (2025-10-24) Remove flag_error_value from Flag_Context (@rexim)
      1.7.0 (2025-09-27) Add float and double flags (by @ByXeno)
                         Add more size suffixes (by @ByXeno)
