@@ -662,6 +662,13 @@ bool flag_c_parse(void *c, int argc, char **argv)
                         Flag_List *list = (Flag_List*)flag__get_ref(&fc->flags[i]);
                         flag_list_append(const char *, list, arg);
                     }
+                    while (argc > 0 && *argv[0] != '-') {
+                        char *arg = flag_shift_args(&argc, &argv);
+                        if (!ignore) {
+                            Flag_List *list = (Flag_List*)flag__get_ref(&fc->flags[i]);
+                            flag_list_append(const char *, list, arg);
+                        }
+                    }
                 }
                 break;
 
@@ -681,6 +688,13 @@ bool flag_c_parse(void *c, int argc, char **argv)
                     if (!ignore) {
                         Flag_List_Mut *list = (Flag_List_Mut*)flag__get_ref(&fc->flags[i]);
                         flag_list_append(char *, list, arg);
+                    }
+                    while (argc > 0 && *argv[0] != '-') {
+                        char *arg = flag_shift_args(&argc, &argv);
+                        if (!ignore) {
+                            Flag_List_Mut *list = (Flag_List_Mut*)flag__get_ref(&fc->flags[i]);
+                            flag_list_append(char *, list, arg);
+                        }
                     }
                 }
                 break;
@@ -876,7 +890,7 @@ void flag_c_print_options(void *c, FILE *stream)
         switch (fc->flags[i].type) {
         case FLAG_LIST_MUT:
         case FLAG_LIST:
-            fprintf(stream, "    -%s <str> ... -%s <str> ...\n", flag->name, flag->name);
+            fprintf(stream, "    -%s <str> ...\n", flag->name);
             fprintf(stream, "        %s\n", flag->desc);
             break;
         case FLAG_BOOL:
