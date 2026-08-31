@@ -99,6 +99,7 @@ typedef struct {
 /// API that operate on implicit global flag context
 
 char *flag_name(void *val);
+char *flag_desc(void *val);
 
 bool *flag_bool(const char *name, bool def, const char *desc);
 void flag_bool_var(bool *var, const char *name, bool def, const char *desc);
@@ -147,6 +148,7 @@ void flag_print_options(FILE *stream);
 void *flag_c_new(const char *program_name);
 void flag_c_free(void *c);
 char *flag_c_name(void *c, void *val);
+char *flag_c_desc(void *c, void *val);
 
 bool *flag_c_bool(void *c, const char *name, bool def, const char *desc);
 void flag_c_bool_var(void *c, bool *var, const char *name, bool def, const char *desc);
@@ -296,6 +298,25 @@ char *flag_c_name(void *c, void *val)
         Flag *flag = &fc->flags[i];
         if (flag__get_ref(flag) == val) {
             return flag->name;
+        }
+    }
+
+    return NULL;
+}
+
+char *flag_desc(void *val)
+{
+    return flag_c_desc(&flag_global_context, val);
+}
+
+char *flag_c_desc(void *c, void *val)
+{
+    Flag_Context *fc = (Flag_Context*)c;
+
+    for (size_t i = 0; i < fc->flags_count; ++i) {
+        Flag *flag = &fc->flags[i];
+        if (flag__get_ref(flag) == val) {
+            return flag->desc;
         }
     }
 
